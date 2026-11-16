@@ -58,20 +58,26 @@ class FakeAlarmScheduler(
 ) : AlarmScheduler {
     override val plan = MutableStateFlow(SchedulePlan())
 
+    /** False stands for a phone on which the user revoked exact alarms. */
+    var exactAlarmsAllowed = true
+
     override suspend fun rescheduleAll() {
         val now = clock.instant()
         val session = sessions.current()?.takeIf { it.isActive(now) }
         plan.value = planSchedule(alarms.all(), session, settings.current(), clock)
     }
 
-    override suspend fun scheduleTestAlarm(): Instant = clock.instant().plus(AlarmBroadcast.TEST_ALARM_DELAY)
+    override suspend fun scheduleTestAlarm(): Instant? =
+        if (exactAlarmsAllowed) clock.instant().plus(AlarmBroadcast.TEST_ALARM_DELAY) else null
 }
 
 /** A ring controller whose state the test sets directly. */
 class FakeRingController : RingController {
     override val state = MutableStateFlow<RingingState>(RingingState.Idle)
 
-    override fun startRinging(ring: ScheduledRing) = Unit
+    override fun startRinging(ring: ScheduledRing): Boolean = false
+
+    override fun resumeRinging(ring: ScheduledRing) = Unit
 
     override suspend fun dismissWithBarcode(scanned: ScannedCode): DismissResult = DismissResult.NOT_RINGING
 

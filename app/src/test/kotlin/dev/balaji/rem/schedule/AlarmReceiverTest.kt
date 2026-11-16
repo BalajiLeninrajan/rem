@@ -48,6 +48,42 @@ class AlarmReceiverTest {
     }
 
     @Test
+    fun `a ring that did not start is left unfired while its deadline is ahead`() = runTest {
+        val container = app.useFakeContainer(backgroundScope)
+        container.ringController.accepts = false
+        val ahead = Instant.now().plusSeconds(900)
+        val early = ScheduledRing(alarmId = 5, ringAt = ahead.minusSeconds(900), deadline = ahead)
+
+        AlarmReceiver().onReceive(app, AlarmBroadcast.fireIntent(app, early))
+        runCurrent()
+
+        assertEquals(listOf(emptyMap<Long, Instant>()), container.alarmScheduler.reschedules)
+    }
+
+    @Test
+    fun `a ring that did not start counts as fired once its deadline has passed`() = runTest {
+        val container = app.useFakeContainer(backgroundScope)
+        container.ringController.accepts = false
+
+        AlarmReceiver().onReceive(app, AlarmBroadcast.fireIntent(app, ring))
+        runCurrent()
+
+        assertEquals(listOf(mapOf(5L to deadline)), container.alarmScheduler.reschedules)
+    }
+
+    @Test
+    fun `the watchdog broadcast resumes and neither starts a ring nor records a fire`() = runTest {
+        val container = app.useFakeContainer(backgroundScope)
+
+        AlarmReceiver().onReceive(app, AlarmBroadcast.resumeIntent(app, ring))
+        runCurrent()
+
+        assertEquals(listOf(ring), container.ringController.resumed)
+        assertTrue(container.ringController.started.isEmpty())
+        assertTrue(container.ringStateStore.lastFired().isEmpty())
+    }
+
+    @Test
     fun `a broadcast without a complete ring does nothing`() = runTest {
         val container = app.useFakeContainer(backgroundScope)
         val incomplete = AlarmBroadcast.fireIntent(app, ring).apply { removeExtra(AlarmBroadcast.EXTRA_RING_AT) }

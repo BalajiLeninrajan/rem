@@ -45,11 +45,20 @@ class RecordingNotifier : AlarmNotifier {
 
 class RecordingRingController : RingController {
     val started = mutableListOf<ScheduledRing>()
+    val resumed = mutableListOf<ScheduledRing>()
+
+    /** What [startRinging] answers. False stands for a ring that another ring swallowed. */
+    var accepts = true
 
     override val state: StateFlow<RingingState> = MutableStateFlow(RingingState.Idle)
 
-    override fun startRinging(ring: ScheduledRing) {
+    override fun startRinging(ring: ScheduledRing): Boolean {
         started += ring
+        return accepts
+    }
+
+    override fun resumeRinging(ring: ScheduledRing) {
+        resumed += ring
     }
 
     override suspend fun dismissWithBarcode(scanned: ScannedCode) = DismissResult.NOT_RINGING
@@ -73,7 +82,7 @@ class RecordingScheduler(private val ringState: RingStateStore) : AlarmScheduler
         reschedules += ringState.lastFired()
     }
 
-    override suspend fun scheduleTestAlarm(): Instant = error("not used by these tests")
+    override suspend fun scheduleTestAlarm(): Instant? = error("not used by these tests")
 }
 
 class FakeAppContainer(override val applicationScope: CoroutineScope) : AppContainer {

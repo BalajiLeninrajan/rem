@@ -65,7 +65,11 @@ class AlarmFlowTest {
     @Test
     fun `an alarm is scheduled, moved by a sleep session, rung and dismissed with its barcode`() = wholeFlow {
         val start = container.clock.instant()
-        val wakeBy = start.plus(Duration.ofHours(2)).atZone(container.clock.zone).toLocalTime().truncatedTo(ChronoUnit.MINUTES)
+        // One hour cycles and no time to fall asleep put the early ring 60 minutes ahead and the
+        // deadline 75. The test fires the ring right away, and a fired deadline more than the
+        // largest early window (90 minutes) ahead of the clock would be dropped as impossible.
+        container.settingsRepository.update { it.copy(cycleMinutes = 60, fallAsleepMinutes = 0) }
+        val wakeBy = start.plus(Duration.ofMinutes(75)).atZone(container.clock.zone).toLocalTime().truncatedTo(ChronoUnit.MINUTES)
         container.barcodeRepository.add(Barcode(label = "toothpaste", format = BarcodeFormat.EAN_13, value = "0036000291452"))
 
         // Saving is all the editor does. The scheduler watches the repository.
@@ -117,7 +121,7 @@ class AlarmFlowTest {
     fun `the test alarm rings without a stored alarm and stops with the plain button when no barcode is registered`() = wholeFlow {
         container.sleepSessionRepository.start(container.clock.instant())
 
-        val ringAt = container.alarmScheduler.scheduleTestAlarm()
+        val ringAt = container.alarmScheduler.scheduleTestAlarm()!!
         val fire = shadowOf(shadowOf(alarmManager).scheduledAlarms.single().operation).savedIntent
         assertEquals(ScheduledRing(AlarmBroadcast.TEST_ALARM_ID, ringAt, ringAt), fire.scheduledRingOrNull())
 

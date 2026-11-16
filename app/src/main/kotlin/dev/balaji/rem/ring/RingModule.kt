@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.core.content.ContextCompat
 import dev.balaji.rem.R
 import dev.balaji.rem.di.AppContainer
+import dev.balaji.rem.schedule.AlarmClocks
 
 /**
  * Builds the ring controller and the notifier for the app container. This file is the
@@ -21,6 +22,7 @@ fun createRingController(context: Context, container: AppContainer): RingControl
         ringState = container.ringStateStore,
         notifier = container.alarmNotifier,
         launcher = { ring -> ContextCompat.startForegroundService(context, RingContract.serviceIntent(context, ring)) },
+        watchdog = AlarmClocks(context),
         reschedule = { container.alarmScheduler.rescheduleAll() },
         clock = container.clock,
         scope = container.applicationScope,

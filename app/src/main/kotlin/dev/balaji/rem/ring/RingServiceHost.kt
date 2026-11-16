@@ -34,9 +34,21 @@ internal interface RingServiceHost {
     /**
      * Called from `onStartCommand`. A redelivered start means the process died during a
      * ring and the system restarted the service, so the ring is picked up again if its
-     * record is still persisted.
+     * record is still persisted. A retried start counts as redelivered.
      */
     fun onServiceStarted(ring: ScheduledRing, redelivered: Boolean)
+}
+
+/**
+ * One alarm clock entry, apart from the entries of the stored alarms, that asks for
+ * [RingController.resumeRinging]. Alarm clock entries outlive the process, and their
+ * delivery may start a foreground service that plays.
+ */
+internal interface RingWatchdog {
+    /** Sets or moves the entry so it fires at [at] for [ring]. False when it could not be set. */
+    fun arm(ring: ScheduledRing, at: Instant): Boolean
+
+    fun cancel()
 }
 
 /** Starts [RingingService]. A seam so the controller can be tested without Android. */

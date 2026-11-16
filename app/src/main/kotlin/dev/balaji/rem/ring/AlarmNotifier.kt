@@ -11,6 +11,9 @@ enum class MissedReason {
 
     /** The alarm rang for 30 minutes without being dismissed. */
     RING_TIMED_OUT,
+
+    /** The alarm came due while another alarm was ringing, so it never got a ring of its own. */
+    OTHER_ALARM_RINGING,
 }
 
 /** @property label the alarm label, possibly empty. */

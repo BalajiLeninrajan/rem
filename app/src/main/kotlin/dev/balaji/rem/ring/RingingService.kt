@@ -73,7 +73,8 @@ class RingingService : Service() {
             return START_NOT_STICKY
         }
         acquireWakeLock()
-        host.onServiceStarted(ring, redelivered = (flags and START_FLAG_REDELIVERY) != 0)
+        // A retried start is one whose first delivery died with the process, so it resumes like a redelivery.
+        host.onServiceStarted(ring, redelivered = (flags and (START_FLAG_REDELIVERY or START_FLAG_RETRY)) != 0)
         if (commands == null) {
             commands = scope.launch { host.command.collect { follow(it) } }
         }

@@ -101,6 +101,7 @@ internal class RingNotifications(private val context: Context) : AlarmNotifier {
                 MissedReason.NOT_FIRED -> R.string.ring_missed_not_fired
                 MissedReason.RING_INTERRUPTED -> R.string.ring_missed_interrupted
                 MissedReason.RING_TIMED_OUT -> R.string.ring_missed_timed_out
+                MissedReason.OTHER_ALARM_RINGING -> R.string.ring_missed_other_ringing
             },
             time,
         )

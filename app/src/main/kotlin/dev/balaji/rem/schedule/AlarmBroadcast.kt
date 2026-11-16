@@ -11,6 +11,9 @@ import java.time.Instant
 object AlarmBroadcast {
     const val ACTION_FIRE = "dev.balaji.rem.action.ALARM_FIRE"
 
+    /** Sent by the watchdog entry that is kept ahead of a live ring. Asks to pick that ring up again. */
+    const val ACTION_RESUME = "dev.balaji.rem.action.ALARM_RESUME"
+
     const val EXTRA_ALARM_ID = "dev.balaji.rem.extra.ALARM_ID"
 
     /** Epoch milliseconds. */
@@ -35,6 +38,16 @@ object AlarmBroadcast {
             .putScheduledRing(ring)
 
     fun alarmUri(alarmId: Long): Uri = Uri.parse("rem://alarm/$alarmId")
+
+    /**
+     * The intent of the watchdog entry. Its own action and data URI keep its PendingIntent
+     * apart from every alarm's, so a reschedule never replaces or cancels it.
+     */
+    fun resumeIntent(context: Context, ring: ScheduledRing): Intent =
+        Intent(context, AlarmReceiver::class.java)
+            .setAction(ACTION_RESUME)
+            .setData(Uri.parse("rem://resume"))
+            .putScheduledRing(ring)
 }
 
 /** Writes [ring] into the extras. Instants keep millisecond precision. */
