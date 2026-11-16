@@ -1,5 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        The app never uses the network. ML Kit's logging library asks for these two, and
+        without them its usage reports cannot leave the device.
+    -->
+    <uses-permission
+        android:name="android.permission.INTERNET"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.ACCESS_NETWORK_STATE"
+        tools:node="remove" />
 
     <!-- Exact alarms. USE_EXACT_ALARM exists from API 33, the user-revocable one covers 31 and 32. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
