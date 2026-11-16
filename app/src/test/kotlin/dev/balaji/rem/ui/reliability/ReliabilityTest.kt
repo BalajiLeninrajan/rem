@@ -18,6 +18,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -118,6 +119,25 @@ class ReliabilityTest {
             statuses(silenced, barcodeCount = 1).filterValues { it != CheckStatus.OK },
         )
         assertEquals(1, reliabilityProblemCount(silenced, barcodeCount = 1))
+    }
+
+    @Test
+    fun `a test alarm that could not be set is reported and not announced`() = runTest {
+        val clock = MutableClock(Instant.parse("2026-01-14T23:00:00Z"), ZoneOffset.UTC)
+        val scheduler = scheduler(clock).apply { exactAlarmsAllowed = false }
+        val viewModel = ReliabilityViewModel(InMemoryBarcodeRepository(), scheduler, clock)
+        keepCollecting(viewModel.state)
+
+        viewModel.scheduleTestAlarm()
+        advanceUntilIdle()
+        assertNull(viewModel.state.value.testAlarmAt)
+        assertTrue(viewModel.state.value.testAlarmRefused)
+
+        scheduler.exactAlarmsAllowed = true
+        viewModel.scheduleTestAlarm()
+        advanceUntilIdle()
+        assertEquals(Instant.parse("2026-01-14T23:01:00Z"), viewModel.state.value.testAlarmAt)
+        assertFalse(viewModel.state.value.testAlarmRefused)
     }
 
     @Test

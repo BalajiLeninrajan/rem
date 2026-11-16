@@ -11,6 +11,7 @@ import dev.balaji.rem.core.RepeatDays
 import dev.balaji.rem.core.ScheduledRing
 import dev.balaji.rem.core.WakeExplanation
 import dev.balaji.rem.data.RingingRecord
+import dev.balaji.rem.data.SleepSessionRepository
 import dev.balaji.rem.data.fake.InMemoryAlarmRepository
 import dev.balaji.rem.data.fake.InMemoryRingStateStore
 import dev.balaji.rem.data.fake.InMemorySettingsRepository
@@ -20,6 +21,7 @@ import dev.balaji.rem.ring.MissedReason
 import dev.balaji.rem.ui.AppLinks
 import dev.balaji.rem.ui.navigation.AlarmEditorRoute
 import dev.balaji.rem.ui.navigation.ReliabilityRoute
+import java.io.IOException
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -27,6 +29,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -72,6 +75,12 @@ class AlarmManagerSchedulerTest {
     private fun TestScope.scheduler() =
         AlarmManagerScheduler(context, alarms, sessions, settings, ringState, notifier, clock, backgroundScope)
             .also { runCurrent() }
+
+    /** Lets the second look at rings that seemed missed happen. It comes a few seconds after the first. */
+    private fun TestScope.confirmMissed() {
+        advanceTimeBy(10_000)
+        runCurrent()
+    }
 
     /** What AlarmManager holds, read back from the PendingIntents, ordered by alarm id. */
     private fun alarmClocks(): List<ScheduledRing> =
@@ -220,6 +229,9 @@ class AlarmManagerSchedulerTest {
         clock.now = at("2026-01-15T09:00")
         scheduler.rescheduleAll()
         scheduler.rescheduleAll()
+        assertTrue("the first look only notes the ring", notifier.missed.isEmpty())
+        confirmMissed()
+        scheduler.rescheduleAll()
 
         assertEquals(listOf(MissedAlarm(id, "work", at("2026-01-15T07:00"), MissedReason.NOT_FIRED)), notifier.missed)
         val tomorrow = at("2026-01-16T07:00")
@@ -234,7 +246,7 @@ class AlarmManagerSchedulerTest {
 
         clock.now = at("2026-01-15T09:00")
         scheduler.rescheduleAll()
-        runCurrent()
+        confirmMissed()
 
         assertEquals(listOf(MissedAlarm(id, "flight", at("2026-01-15T07:00"), MissedReason.NOT_FIRED)), notifier.missed)
         assertEquals(false, alarms.get(id)?.enabled)
@@ -270,6 +282,7 @@ class AlarmManagerSchedulerTest {
 
         clock.now = at("2026-01-15T07:02")
         scheduler.rescheduleAll()
+        confirmMissed()
 
         assertEquals(listOf(deadline), notifier.missed.map { it.deadline })
         assertFalse(ScheduledRing(id, deadline, deadline) in ringState.scheduled())
@@ -282,6 +295,7 @@ class AlarmManagerSchedulerTest {
         clock.now = at("2026-01-15T09:00")
 
         scheduler()
+        confirmMissed()
 
         assertTrue(notifier.missed.isEmpty())
         assertTrue(ringState.scheduled().isEmpty())
@@ -330,6 +344,184 @@ class AlarmManagerSchedulerTest {
     }
 
     @Test
+    fun `a one-shot alarm moved to another time while it rings is planned at the new time`() = runTest {
+        val scheduler = scheduler()
+        val once = alarms.upsert(sevenOnce)
+        runCurrent()
+        val deadline = at("2026-01-15T07:00")
+        clock.now = deadline.plusSeconds(5)
+        ringState.markFired(once, deadline)
+        ringState.setRinging(RingingRecord(once, startedAt = deadline, ringAt = deadline, deadline = deadline))
+        runCurrent()
+
+        alarms.upsert(sevenOnce.copy(id = once, time = LocalTime.of(7, 30)))
+        runCurrent()
+
+        val moved = at("2026-01-15T07:30")
+        assertEquals(listOf(ScheduledRing(once, moved, moved)), alarmClocks())
+        assertEquals(moved, scheduler.plan.value.forAlarm(once)?.ringAt)
+    }
+
+    @Test
+    fun `a ring that looked missed is not reported when its fire arrives before the second look`() = runTest {
+        val scheduler = scheduler()
+        val id = alarms.upsert(sevenOnce)
+        runCurrent()
+        val deadline = at("2026-01-15T07:00")
+
+        // The clock jumps past the deadline. The clock-change reschedule runs before the alarm broadcast.
+        clock.now = at("2026-01-15T07:05")
+        scheduler.rescheduleAll()
+        assertTrue(notifier.missed.isEmpty())
+        assertEquals(true, alarms.get(id)?.enabled)
+
+        ringState.markFired(id, deadline)
+        ringState.setRinging(RingingRecord(id, startedAt = clock.now, ringAt = deadline, deadline = deadline))
+        confirmMissed()
+
+        assertTrue(notifier.missed.isEmpty())
+        assertEquals(true, alarms.get(id)?.enabled)
+    }
+
+    @Test
+    fun `the alarm that is ringing is never reported as missed or switched off`() = runTest {
+        val scheduler = scheduler()
+        val id = alarms.upsert(sevenOnce)
+        runCurrent()
+        val deadline = at("2026-01-15T07:00")
+
+        // Ringing, but the fired record could not be written.
+        clock.now = at("2026-01-15T07:05")
+        ringState.setRinging(RingingRecord(id, startedAt = deadline, ringAt = deadline, deadline = deadline))
+        scheduler.rescheduleAll()
+        confirmMissed()
+
+        assertTrue(notifier.missed.isEmpty())
+        assertEquals(true, alarms.get(id)?.enabled)
+    }
+
+    @Test
+    fun `a missed one-shot alarm that was moved to a new time since stays on and is set`() = runTest {
+        val scheduler = scheduler()
+        val id = alarms.upsert(sevenOnce)
+        runCurrent()
+        // Nothing reschedules between the missed deadline and the edit.
+        clock.now = at("2026-01-15T09:00")
+
+        alarms.upsert(sevenOnce.copy(id = id, time = LocalTime.of(10, 0)))
+        runCurrent()
+        confirmMissed()
+
+        assertEquals(listOf(at("2026-01-15T07:00")), notifier.missed.map { it.deadline })
+        assertEquals(true, alarms.get(id)?.enabled)
+        val moved = at("2026-01-15T10:00")
+        assertEquals(listOf(ScheduledRing(id, moved, moved)), alarmClocks())
+        assertEquals(moved, scheduler.plan.value.forAlarm(id)?.ringAt)
+    }
+
+    @Test
+    fun `a fired record left far ahead by a clock that moved back is dropped`() = runTest {
+        val scheduler = scheduler()
+        val id = alarms.upsert(sevenDaily)
+        runCurrent()
+
+        // The alarm rang while the clock said Friday. The clock is back at Wednesday night.
+        ringState.markFired(id, at("2026-01-16T07:00"))
+        scheduler.rescheduleAll()
+
+        val thursday = at("2026-01-15T07:00")
+        assertEquals(listOf(ScheduledRing(id, thursday, thursday)), alarmClocks())
+        assertTrue(ringState.lastFired().isEmpty())
+    }
+
+    @Test
+    fun `a fired record up to the largest early window ahead is kept`() = runTest {
+        val scheduler = scheduler()
+        val id = alarms.upsert(sevenDaily)
+        runCurrent()
+        val deadline = at("2026-01-15T07:00")
+
+        clock.now = at("2026-01-15T05:30")
+        ringState.markFired(id, deadline)
+        scheduler.rescheduleAll()
+
+        val tomorrow = at("2026-01-16T07:00")
+        assertEquals(listOf(ScheduledRing(id, tomorrow, tomorrow)), alarmClocks())
+        assertEquals(mapOf(id to deadline), ringState.lastFired())
+    }
+
+    @Test
+    fun `a one-shot alarm switched back on after its early ring is planned for the deadline still ahead`() = runTest {
+        val scheduler = scheduler()
+        val id = alarms.upsert(sevenOnce)
+        runCurrent()
+        val deadline = at("2026-01-15T07:00")
+
+        // It rang early at 06:45, was dismissed and so switched off.
+        clock.now = at("2026-01-15T06:47")
+        ringState.markFired(id, deadline)
+        alarms.setEnabled(id, false)
+        runCurrent()
+        assertTrue(ringState.lastFired().isEmpty())
+
+        alarms.setEnabled(id, true)
+        runCurrent()
+
+        assertEquals(listOf(ScheduledRing(id, deadline, deadline)), alarmClocks())
+        assertEquals(deadline, scheduler.plan.value.forAlarm(id)?.ringAt)
+    }
+
+    @Test
+    fun `alarms are still set when the bookkeeping around them fails`() = runTest {
+        val stale = clock.instant().minusSeconds(17 * 3600)
+        val brokenSessions = object : SleepSessionRepository by sessions {
+            override suspend fun end(): Unit = throw IOException("disk full")
+        }
+        val brokenRingState = object : dev.balaji.rem.data.RingStateStore by ringState {
+            override suspend fun retainFired(alarmIds: Set<Long>): Unit = throw IOException("disk full")
+
+            override suspend fun setScheduled(rings: List<ScheduledRing>): Unit = throw IOException("disk full")
+        }
+        sessions.start(stale)
+        val id = alarms.upsert(sevenDaily)
+        val scheduler =
+            AlarmManagerScheduler(context, alarms, brokenSessions, settings, brokenRingState, notifier, clock, backgroundScope)
+        runCurrent()
+
+        scheduler.rescheduleAll()
+
+        val ring = ScheduledRing(id, at("2026-01-15T07:00"), at("2026-01-15T07:00"))
+        assertEquals(listOf(ring), alarmClocks())
+        // The session that could not be ended does not shape the ring either.
+        assertEquals(WakeExplanation.AtDeadline(DeadlineReason.NO_SESSION), scheduler.plan.value.forAlarm(id)?.explanation)
+        assertEquals(stale, sessions.current()?.startedAt)
+    }
+
+    @Test
+    fun `the watchdog entry of a live ring is not touched by a reschedule and can be cancelled`() = runTest {
+        val scheduler = scheduler()
+        val id = alarms.upsert(sevenDaily)
+        runCurrent()
+        val deadline = at("2026-01-15T07:00")
+        val clocks = AlarmClocks(context)
+
+        assertTrue(clocks.arm(ScheduledRing(id, deadline, deadline), clock.instant().plusSeconds(60)))
+        scheduler.rescheduleAll()
+        alarms.setEnabled(id, false)
+        runCurrent()
+
+        val left = shadowOf(alarmManager).scheduledAlarms.single()
+        assertEquals(AlarmBroadcast.ACTION_RESUME, shadowOf(left.operation).savedIntent.action)
+        assertEquals(clock.instant().plusSeconds(60).toEpochMilli(), alarmManager.nextAlarmClock.triggerTime)
+
+        clocks.cancel()
+        assertNull(alarmManager.nextAlarmClock)
+
+        ShadowAlarmManager.setCanScheduleExactAlarms(false)
+        assertFalse(clocks.arm(ScheduledRing(id, deadline, deadline), clock.instant().plusSeconds(60)))
+    }
+
+    @Test
     fun `a session older than 16 hours is ended`() = runTest {
         sessions.start(clock.instant().minusSeconds(17 * 3600))
         val id = alarms.upsert(sevenDaily)
@@ -362,7 +554,7 @@ class AlarmManagerSchedulerTest {
 
         val id = alarms.upsert(sevenDaily)
         runCurrent()
-        scheduler.scheduleTestAlarm()
+        assertNull("the caller is told that nothing was set", scheduler.scheduleTestAlarm())
 
         assertTrue(alarmClocks().isEmpty())
         assertEquals(at("2026-01-15T07:00"), scheduler.plan.value.forAlarm(id)?.ringAt)
@@ -378,7 +570,7 @@ class AlarmManagerSchedulerTest {
     fun `the test alarm rings in one minute and a reschedule leaves it alone`() = runTest {
         val scheduler = scheduler()
 
-        val ringAt = scheduler.scheduleTestAlarm()
+        val ringAt = scheduler.scheduleTestAlarm()!!
 
         val test = ScheduledRing(AlarmBroadcast.TEST_ALARM_ID, ringAt, ringAt)
         assertEquals(clock.instant().plus(AlarmBroadcast.TEST_ALARM_DELAY), ringAt)

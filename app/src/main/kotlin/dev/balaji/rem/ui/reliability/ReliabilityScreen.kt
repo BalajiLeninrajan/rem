@@ -210,10 +210,10 @@ private fun TestAlarmCard(state: ReliabilityUiState, onTestAlarm: () -> Unit) {
             Text(text = stringResource(R.string.ui_test_alarm_title), style = MaterialTheme.typography.titleMedium)
             val testAt = state.testAlarmAt
             Text(
-                text = if (testAt == null) {
-                    stringResource(R.string.ui_test_alarm_body)
-                } else {
-                    stringResource(R.string.ui_test_alarm_scheduled, clockText(testAt, state.zone))
+                text = when {
+                    testAt != null -> stringResource(R.string.ui_test_alarm_scheduled, clockText(testAt, state.zone))
+                    state.testAlarmRefused -> stringResource(R.string.ui_test_alarm_refused)
+                    else -> stringResource(R.string.ui_test_alarm_body)
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )

@@ -20,7 +20,8 @@ interface AlarmScheduler {
      * Idempotent and safe to call from anywhere, concurrently. In order it:
      * 1. ends a sleep session that is no longer active (older than 16 hours),
      * 2. reports rings that should have fired and did not, through `AlarmNotifier.notifyMissed`
-     *    (see `checkMissed` in :core),
+     *    (see `checkMissed` in :core). A ring is reported by the run a few seconds after
+     *    the one that first saw it overdue, which this class starts itself,
      * 3. computes the plan with `planSchedule`,
      * 4. sets one `setAlarmClock` alarm per planned ring and cancels the ones no longer planned,
      * 5. persists the scheduled rings and publishes [plan].
@@ -36,6 +37,8 @@ interface AlarmScheduler {
      * [AlarmBroadcast.TEST_ALARM_ID] and returns its ring time. It goes through the same
      * receiver, service and dismissal as a stored alarm. It is not part of [plan] and
      * [rescheduleAll] leaves it alone.
+     *
+     * @return null when exact alarms are not allowed, so nothing was set.
      */
-    suspend fun scheduleTestAlarm(): Instant
+    suspend fun scheduleTestAlarm(): Instant?
 }
