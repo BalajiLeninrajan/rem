@@ -16,13 +16,19 @@ fun RingNavHost(
     NavHost(navController = navController, startDestination = RingingRoute, modifier = modifier) {
         composable<RingingRoute> {
             RingingScreen(
-                onOpenScanner = { navController.navigate(RingScannerRoute) },
-                onOpenTypedFallback = { navController.navigate(TypedFallbackRoute) },
+                onOpenScanner = { navController.navigate(RingScannerRoute) { launchSingleTop = true } },
+                onOpenTypedFallback = { navController.navigate(TypedFallbackRoute) { launchSingleTop = true } },
             )
         }
         composable<RingScannerRoute> {
             RingScannerScreen(
-                onOpenTypedFallback = { navController.navigate(TypedFallbackRoute) },
+                // Back from the typed fallback returns to the ringing screen, not to a camera that does not work.
+                onOpenTypedFallback = {
+                    navController.navigate(TypedFallbackRoute) {
+                        popUpTo(RingingRoute)
+                        launchSingleTop = true
+                    }
+                },
                 onBack = { navController.popBackStack() },
             )
         }
