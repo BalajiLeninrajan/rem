@@ -30,3 +30,6 @@ keystore.properties
 
 # OS
 .DS_Store
+
+# Claude Code
+.claude/
