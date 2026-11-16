@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -229,7 +230,13 @@ private fun DeadlineDisplay(state: AlarmEditorUiState, onClick: () -> Unit, modi
             Text(text = stringResource(R.string.ui_editor_must_wake_by), style = MaterialTheme.typography.labelLarge)
             ClockText(time = state.time, style = ClockType.hero)
             val preview = state.preview
-            if (preview != null) {
+            if (state.staysOff) {
+                Text(
+                    text = stringResource(R.string.ui_editor_preview_off),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                )
+            } else if (preview != null) {
                 Text(
                     text = if (preview.sessionActive) {
                         stringResource(

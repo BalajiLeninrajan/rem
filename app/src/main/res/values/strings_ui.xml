@@ -88,6 +88,7 @@
     <string name="ui_editor_preview_session">Would ring %1$s, %2$s</string>
     <!-- %s is the ring time. -->
     <string name="ui_editor_preview_no_session">Would ring %s. Earlier if you press going to sleep.</string>
+    <string name="ui_editor_preview_off">This alarm is off and saving keeps it off. Change the time or the days, or switch it on from the home screen.</string>
     <string name="ui_editor_repeat">Repeat</string>
     <string name="ui_editor_repeat_once_hint">No day selected. The alarm rings once and then turns off.</string>
     <string name="ui_editor_label">Label</string>

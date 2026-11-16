@@ -125,6 +125,33 @@ class AlarmEditorViewModelTest {
     }
 
     @Test
+    fun `a switched off alarm says it stays off until the time or the days change`() = runTest {
+        val id = alarms.upsert(Alarm(time = LocalTime.of(8, 15), enabled = false))
+        val editor = editor(id)
+        assertTrue(editor.state.value.staysOff)
+
+        editor.setLabel("New")
+        editor.setTime(LocalTime.of(8, 15))
+        advanceUntilIdle()
+        assertTrue(editor.state.value.staysOff)
+
+        editor.setTime(LocalTime.of(8, 30))
+        advanceUntilIdle()
+        assertFalse(editor.state.value.staysOff)
+
+        editor.setTime(LocalTime.of(8, 15))
+        editor.toggleDay(DayOfWeek.MONDAY)
+        advanceUntilIdle()
+        assertFalse(editor.state.value.staysOff)
+    }
+
+    @Test
+    fun `an alarm that is on, and a new one, never say they stay off`() = runTest {
+        assertFalse(editor().state.value.staysOff)
+        assertFalse(editor(alarms.upsert(Alarm(time = LocalTime.of(8, 15)))).state.value.staysOff)
+    }
+
+    @Test
     fun `changing the time of a switched off alarm switches it on`() = runTest {
         val id = alarms.upsert(Alarm(time = LocalTime.of(8, 15), enabled = false))
         val editor = editor(id)

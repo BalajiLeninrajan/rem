@@ -44,6 +44,8 @@ data class AlarmEditorUiState(
     /** Null means the bundled tone. */
     val ringtoneUri: String? = null,
     val preview: RingPreview? = null,
+    /** True when the stored alarm is off and saving the draft as it stands keeps it off. Then nothing would ring. */
+    val staysOff: Boolean = false,
     val speakerFallbackSeconds: Int = RemSettings.DEFAULT.speakerFallbackSeconds,
     val now: Instant = Instant.EPOCH,
     val zone: ZoneId = ZoneOffset.UTC,
@@ -63,12 +65,14 @@ class AlarmEditorViewModel(
 ) : ViewModel() {
     private val draft = MutableStateFlow(AlarmEditorUiState())
     private val now = MutableStateFlow(clock.instant())
+    @Volatile
     private var stored: Alarm? = null
 
     val state: StateFlow<AlarmEditorUiState> =
         combine(draft, settings.settings, sessions.session, now) { current, storedSettings, session, instant ->
             current.copy(
                 preview = if (current.loading) null else preview(current, storedSettings, session, instant),
+                staysOff = stored?.let { !it.enabled && !scheduleChanged(it, current) } ?: false,
                 speakerFallbackSeconds = storedSettings.speakerFallbackSeconds,
                 now = instant,
                 zone = clock.zone,
@@ -122,7 +126,7 @@ class AlarmEditorViewModel(
         if (!current.canSave || current.finished) return
         viewModelScope.launch {
             val original = stored
-            val scheduleChanged = original == null || original.time != current.time || original.repeatDays != current.repeatDays
+            val scheduleChanged = original == null || scheduleChanged(original, current)
             alarms.upsert(
                 Alarm(
                     id = original?.id ?: Alarm.NEW_ID,
@@ -146,6 +150,9 @@ class AlarmEditorViewModel(
             draft.update { it.copy(finished = true) }
         }
     }
+
+    private fun scheduleChanged(original: Alarm, current: AlarmEditorUiState): Boolean =
+        original.time != current.time || original.repeatDays != current.repeatDays
 
     private fun preview(current: AlarmEditorUiState, settings: RemSettings, session: SleepSession?, now: Instant): RingPreview {
         val activeSession = session?.takeIf { it.isActive(now) }
