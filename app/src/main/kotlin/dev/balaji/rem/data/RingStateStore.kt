@@ -4,8 +4,19 @@ import dev.balaji.rem.core.ScheduledRing
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 
-/** "Alarm X has been ringing since T for deadline D." Written when a ring starts, cleared when it ends. */
-data class RingingRecord(val alarmId: Long, val startedAt: Instant, val ringAt: Instant, val deadline: Instant)
+/**
+ * "Alarm X has been ringing since T for deadline D." Written when a ring starts, cleared when it ends.
+ *
+ * @property requiresBarcode what the ring decided when it started. A ring that is picked
+ *   up again after a process death keeps this, whatever was deleted in the meantime.
+ */
+data class RingingRecord(
+    val alarmId: Long,
+    val startedAt: Instant,
+    val ringAt: Instant,
+    val deadline: Instant,
+    val requiresBarcode: Boolean = true,
+)
 
 /**
  * Small persisted bookkeeping around rings, in device-protected storage. It answers three
@@ -37,6 +48,9 @@ interface RingStateStore {
 
     /** Records that the occurrence of [alarmId] with this [deadline] fired. Keeps the later deadline if one is already stored. */
     suspend fun markFired(alarmId: Long, deadline: Instant)
+
+    /** Forgets the fired record of [alarmId], so its occurrence can be planned again. */
+    suspend fun removeFired(alarmId: Long)
 
     /** Drops fired records of alarms that are not in [alarmIds], so deleted alarms do not pile up. */
     suspend fun retainFired(alarmIds: Set<Long>)

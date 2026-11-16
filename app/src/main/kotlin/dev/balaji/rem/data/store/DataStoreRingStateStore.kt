@@ -3,6 +3,7 @@ package dev.balaji.rem.data.store
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -23,7 +24,7 @@ import kotlinx.serialization.json.Json
 
 /**
  * Layout of the file: the ringing record is four long keys that exist together or not at
- * all, each fired deadline is one long key named `fired_<alarm id>`, and the scheduled
+ * all plus one boolean that counts as true when it is absent, each fired deadline is one long key named `fired_<alarm id>`, and the scheduled
  * rings are one JSON string because their order is kept.
  */
 class DataStoreRingStateStore(private val store: DataStore<Preferences>) : RingStateStore {
@@ -37,6 +38,7 @@ class DataStoreRingStateStore(private val store: DataStore<Preferences>) : RingS
             it[RINGING_STARTED_AT] = record.startedAt.toEpochMilli()
             it[RINGING_RING_AT] = record.ringAt.toEpochMilli()
             it[RINGING_DEADLINE] = record.deadline.toEpochMilli()
+            it[RINGING_REQUIRES_BARCODE] = record.requiresBarcode
         }
     }
 
@@ -60,6 +62,10 @@ class DataStoreRingStateStore(private val store: DataStore<Preferences>) : RingS
         }
     }
 
+    override suspend fun removeFired(alarmId: Long) {
+        store.edit { it.remove(firedKey(alarmId)) }
+    }
+
     override suspend fun retainFired(alarmIds: Set<Long>) {
         store.edit { prefs ->
             prefs.firedDeadlines().keys.filterNot { it in alarmIds }.forEach { prefs.remove(firedKey(it)) }
@@ -81,6 +87,7 @@ class DataStoreRingStateStore(private val store: DataStore<Preferences>) : RingS
         val RINGING_STARTED_AT = longPreferencesKey("ringing_started_at_ms")
         val RINGING_RING_AT = longPreferencesKey("ringing_ring_at_ms")
         val RINGING_DEADLINE = longPreferencesKey("ringing_deadline_ms")
+        val RINGING_REQUIRES_BARCODE = booleanPreferencesKey("ringing_requires_barcode")
         val SCHEDULED = stringPreferencesKey("scheduled_rings")
         const val FIRED_PREFIX = "fired_"
 
@@ -92,6 +99,7 @@ class DataStoreRingStateStore(private val store: DataStore<Preferences>) : RingS
                 startedAt = Instant.ofEpochMilli(this[RINGING_STARTED_AT] ?: return null),
                 ringAt = Instant.ofEpochMilli(this[RINGING_RING_AT] ?: return null),
                 deadline = Instant.ofEpochMilli(this[RINGING_DEADLINE] ?: return null),
+                requiresBarcode = this[RINGING_REQUIRES_BARCODE] ?: true,
             )
         }
 
@@ -100,6 +108,7 @@ class DataStoreRingStateStore(private val store: DataStore<Preferences>) : RingS
             remove(RINGING_STARTED_AT)
             remove(RINGING_RING_AT)
             remove(RINGING_DEADLINE)
+            remove(RINGING_REQUIRES_BARCODE)
         }
 
         fun RingingRecord.atMillis() = copy(

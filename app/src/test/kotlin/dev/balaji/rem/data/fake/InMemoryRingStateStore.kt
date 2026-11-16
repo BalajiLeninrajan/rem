@@ -32,6 +32,10 @@ class InMemoryRingStateStore : RingStateStore {
         }
     }
 
+    override suspend fun removeFired(alarmId: Long) {
+        fired.update { it - alarmId }
+    }
+
     override suspend fun retainFired(alarmIds: Set<Long>) {
         fired.update { current -> current.filterKeys { it in alarmIds } }
     }

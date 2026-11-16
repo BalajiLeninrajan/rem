@@ -76,6 +76,34 @@ abstract class RingStateStoreContract {
     }
 
     @Test
+    fun `a ring that needs no barcode keeps that across a write and a clear`() = runTest {
+        val store = createStore()
+        val plain = record.copy(requiresBarcode = false)
+
+        store.setRinging(plain)
+
+        assertEquals(plain, store.currentRinging())
+        assertFalse(store.clearRinging(record))
+        assertTrue(store.clearRinging(plain))
+        store.setRinging(record)
+        assertEquals(true, store.currentRinging()?.requiresBarcode)
+    }
+
+    @Test
+    fun `removeFired forgets one alarm and lets an earlier deadline be stored again`() = runTest {
+        val store = createStore()
+        store.markFired(1, deadline)
+        store.markFired(2, deadline)
+
+        store.removeFired(1)
+        store.removeFired(7)
+
+        assertEquals(mapOf(2L to deadline), store.lastFired())
+        store.markFired(1, deadline.minusSeconds(86_400))
+        assertEquals(deadline.minusSeconds(86_400), store.lastFired()[1L])
+    }
+
+    @Test
     fun `retainFired drops records of other alarms`() = runTest {
         val store = createStore()
         store.markFired(1, deadline)
