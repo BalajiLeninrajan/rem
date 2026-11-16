@@ -62,7 +62,7 @@ class DefaultRingControllerTest {
     private val barcodeSource = object : BarcodeRepository by barcodes {
         override suspend fun all(): List<Barcode> {
             if (failingBarcodeReads-- > 0) throw IOException("disk")
-            return barcodes.all()
+            return this@DefaultRingControllerTest.barcodes.all()
         }
     }
 
