@@ -177,6 +177,9 @@
     <string name="ui_check_notifications">Notifications</string>
     <string name="ui_check_notifications_ok">Allowed. The ringing screen is opened by a notification.</string>
     <string name="ui_check_notifications_problem">Blocked. Without notifications the alarm sounds but the ringing screen never opens.</string>
+    <string name="ui_check_ringing_channel">Ringing alarm category</string>
+    <string name="ui_check_ringing_channel_ok">At full importance. The ringing notification can open the ringing screen.</string>
+    <string name="ui_check_ringing_channel_problem">Silenced or switched off. The alarm still sounds, but on a locked phone the ringing screen does not open. Set the Ringing alarm category back to its loudest level.</string>
     <string name="ui_check_full_screen">Full-screen alarm</string>
     <string name="ui_check_full_screen_ok">Allowed. The ringing screen shows over the lock screen.</string>
     <string name="ui_check_full_screen_problem">Not allowed. On a locked phone you would only get a small notification.</string>

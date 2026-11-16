@@ -3,7 +3,7 @@ package dev.balaji.rem.ui.reliability
 import dev.balaji.rem.ui.system.DoNotDisturb
 import dev.balaji.rem.ui.system.SystemChecks
 
-enum class CheckId { NOTIFICATIONS, FULL_SCREEN_INTENT, EXACT_ALARMS, DO_NOT_DISTURB, BACKGROUND, CAMERA, BARCODE }
+enum class CheckId { NOTIFICATIONS, RINGING_CHANNEL, FULL_SCREEN_INTENT, EXACT_ALARMS, DO_NOT_DISTURB, BACKGROUND, CAMERA, BARCODE }
 
 enum class CheckStatus {
     OK,
@@ -18,6 +18,7 @@ data class ReliabilityCheck(val id: CheckId, val status: CheckStatus)
 /** Every check of the reliability screen, in display order. */
 fun reliabilityChecks(system: SystemChecks, barcodeCount: Int): List<ReliabilityCheck> = listOf(
     ReliabilityCheck(CheckId.NOTIFICATIONS, okIf(system.notificationsEnabled)),
+    ReliabilityCheck(CheckId.RINGING_CHANNEL, okIf(system.ringingChannelLoud)),
     ReliabilityCheck(CheckId.FULL_SCREEN_INTENT, okIf(system.fullScreenIntentAllowed)),
     ReliabilityCheck(CheckId.EXACT_ALARMS, okIf(system.exactAlarmsAllowed)),
     ReliabilityCheck(

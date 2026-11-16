@@ -18,6 +18,13 @@ object SystemSettings {
         Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
     )
 
+    /** The settings of one notification category, where its importance can be put back. */
+    fun openNotificationChannel(context: Context, channelId: String) = context.startOrAppDetails(
+        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, channelId),
+    )
+
     fun openFullScreenIntent(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             context.startOrAppDetails(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, context.packageUri()))

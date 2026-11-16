@@ -44,6 +44,7 @@ class ReliabilityTest {
     fun `each system value fails its own check`() {
         val broken = SystemChecks(
             notificationsEnabled = false,
+            ringingChannelLoud = false,
             fullScreenIntentAllowed = false,
             exactAlarmsAllowed = false,
             doNotDisturb = DoNotDisturb.ALARMS_MUTED,
@@ -106,6 +107,17 @@ class ReliabilityTest {
         viewModel.refresh(SystemChecks())
         advanceUntilIdle()
         assertNull(viewModel.state.value.testAlarmAt)
+    }
+
+    @Test
+    fun `a silenced ringing category fails its own check and counts on home`() {
+        val silenced = SystemChecks(ringingChannelLoud = false)
+
+        assertEquals(
+            mapOf(CheckId.RINGING_CHANNEL to CheckStatus.PROBLEM),
+            statuses(silenced, barcodeCount = 1).filterValues { it != CheckStatus.OK },
+        )
+        assertEquals(1, reliabilityProblemCount(silenced, barcodeCount = 1))
     }
 
     @Test

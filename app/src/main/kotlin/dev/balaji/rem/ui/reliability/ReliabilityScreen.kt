@@ -47,6 +47,7 @@ import dev.balaji.rem.ui.system.SystemChecks
 import dev.balaji.rem.ui.system.SystemSettings
 import dev.balaji.rem.ui.system.findActivity
 import dev.balaji.rem.ui.system.hasPermission
+import dev.balaji.rem.ring.RingContract
 import dev.balaji.rem.ui.system.readSystemChecks
 import dev.balaji.rem.ui.theme.RemTheme
 import java.time.Instant
@@ -94,6 +95,7 @@ fun ReliabilityScreen(
                     } else {
                         SystemSettings.openNotifications(context)
                     }
+                CheckId.RINGING_CHANNEL -> SystemSettings.openNotificationChannel(context, RingContract.CHANNEL_RINGING)
                 CheckId.FULL_SCREEN_INTENT -> SystemSettings.openFullScreenIntent(context)
                 CheckId.EXACT_ALARMS -> SystemSettings.openExactAlarms(context)
                 CheckId.DO_NOT_DISTURB -> SystemSettings.openDoNotDisturb(context)
@@ -260,6 +262,11 @@ private fun CheckId.text(): CheckText = when (this) {
         ok = R.string.ui_check_notifications_ok,
         problem = R.string.ui_check_notifications_problem,
         fix = R.string.ui_check_fix_allow,
+    )
+    CheckId.RINGING_CHANNEL -> CheckText(
+        title = R.string.ui_check_ringing_channel,
+        ok = R.string.ui_check_ringing_channel_ok,
+        problem = R.string.ui_check_ringing_channel_problem,
     )
     CheckId.FULL_SCREEN_INTENT -> CheckText(
         title = R.string.ui_check_full_screen,

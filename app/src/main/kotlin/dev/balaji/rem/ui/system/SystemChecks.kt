@@ -8,12 +8,13 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import dev.balaji.rem.ring.RingContract
 
 enum class DoNotDisturb {
     ALARMS_ALLOWED,
     ALARMS_MUTED,
 
-    /** Do Not Disturb is in priority mode and the app may not read which categories it lets through. */
+    /** Do Not Disturb is in priority mode and the system did not let the app read which categories it lets through. */
     UNKNOWN,
 }
 
@@ -23,6 +24,8 @@ enum class DoNotDisturb {
  */
 data class SystemChecks(
     val notificationsEnabled: Boolean = true,
+    /** False when the user lowered or blocked the "Ringing alarm" category. Then the full-screen intent no longer launches. */
+    val ringingChannelLoud: Boolean = true,
     val fullScreenIntentAllowed: Boolean = true,
     val exactAlarmsAllowed: Boolean = true,
     val doNotDisturb: DoNotDisturb = DoNotDisturb.ALARMS_ALLOWED,
@@ -35,6 +38,9 @@ fun readSystemChecks(context: Context): SystemChecks {
     val notifications = context.getSystemService(NotificationManager::class.java)
     return SystemChecks(
         notificationsEnabled = notifications.areNotificationsEnabled(),
+        ringingChannelLoud = notifications.getNotificationChannel(RingContract.CHANNEL_RINGING)
+            ?.let { it.importance >= NotificationManager.IMPORTANCE_HIGH }
+            ?: true,
         fullScreenIntentAllowed =
             Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || notifications.canUseFullScreenIntent(),
         exactAlarmsAllowed = context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms(),
@@ -57,10 +63,13 @@ private fun NotificationManager.doNotDisturb(): DoNotDisturb = when (currentInte
     else -> DoNotDisturb.ALARMS_ALLOWED
 }
 
+/**
+ * Reads the policy that is applied right now. `notificationPolicy` would be the user's
+ * default policy, which differs as soon as a mode with its own rules is active.
+ */
 private fun NotificationManager.priorityModeAllowsAlarms(): DoNotDisturb = try {
-    val allowed = notificationPolicy.priorityCategories and NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS != 0
+    val allowed = consolidatedNotificationPolicy.priorityCategories and NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS != 0
     if (allowed) DoNotDisturb.ALARMS_ALLOWED else DoNotDisturb.ALARMS_MUTED
 } catch (e: SecurityException) {
-    // Reading the policy needs notification policy access, which the app does not ask for.
     DoNotDisturb.UNKNOWN
 }
