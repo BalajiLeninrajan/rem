@@ -19,7 +19,8 @@ import dev.balaji.rem.ui.settings.SettingsScreen
 
 /**
  * Navigation graph of [dev.balaji.rem.MainActivity]. The ringing screens are not here,
- * they belong to the ringing activity.
+ * they belong to the ringing activity. Navigation Compose runs the predictive back
+ * animation between destinations.
  *
  * @param linkedRoute a route from [dev.balaji.rem.ui.AppLinks.routeFor] to open on top of home, or null.
  */
@@ -36,43 +37,60 @@ fun RemNavHost(
     NavHost(navController = navController, startDestination = HomeRoute, modifier = modifier) {
         composable<HomeRoute> {
             HomeScreen(
-                onAddAlarm = { navController.navigate(AlarmEditorRoute(Alarm.NEW_ID)) },
-                onEditAlarm = { alarmId -> navController.navigate(AlarmEditorRoute(alarmId)) },
-                onOpenBarcodes = { navController.navigate(BarcodesRoute) },
-                onOpenSettings = { navController.navigate(SettingsRoute) },
-                onOpenReliability = { navController.navigate(ReliabilityRoute) },
-                onOpenOnboarding = { navController.navigate(OnboardingRoute) },
+                onAddAlarm = { navController.open(AlarmEditorRoute(Alarm.NEW_ID)) },
+                onEditAlarm = { alarmId -> navController.open(AlarmEditorRoute(alarmId)) },
+                onOpenBarcodes = { navController.open(BarcodesRoute) },
+                onOpenSettings = { navController.open(SettingsRoute) },
+                onOpenReliability = { navController.open(ReliabilityRoute) },
+                onOpenOnboarding = { navController.open(OnboardingRoute) },
             )
         }
         composable<AlarmEditorRoute> { entry ->
             AlarmEditorScreen(
                 alarmId = entry.toRoute<AlarmEditorRoute>().alarmId,
-                onDone = { navController.popBackStack() },
+                onDone = navController::back,
             )
         }
         composable<BarcodesRoute> {
             BarcodesScreen(
-                onScan = { testOnly -> navController.navigate(BarcodeScanRoute(testOnly)) },
-                onBack = { navController.popBackStack() },
+                onScan = { testOnly -> navController.open(BarcodeScanRoute(testOnly)) },
+                onBack = navController::back,
             )
         }
         composable<BarcodeScanRoute> { entry ->
             BarcodeScanScreen(
                 testOnly = entry.toRoute<BarcodeScanRoute>().testOnly,
-                onDone = { navController.popBackStack() },
+                onDone = navController::back,
             )
         }
         composable<SettingsRoute> {
-            SettingsScreen(onBack = { navController.popBackStack() })
+            SettingsScreen(onBack = navController::back)
         }
         composable<ReliabilityRoute> {
             ReliabilityScreen(
-                onOpenBarcodes = { navController.navigate(BarcodesRoute) },
-                onBack = { navController.popBackStack() },
+                onOpenBarcodes = { navController.open(BarcodesRoute) },
+                onBack = navController::back,
             )
         }
         composable<OnboardingRoute> {
-            OnboardingScreen(onDone = { navController.popBackStack() })
+            OnboardingScreen(
+                onDone = navController::back,
+                onAddBarcode = {
+                    navController.navigate(BarcodesRoute) {
+                        popUpTo(OnboardingRoute) { inclusive = true }
+                    }
+                },
+            )
         }
     }
+}
+
+/** A second tap during the transition must not push the same screen twice. */
+private fun NavHostController.open(route: Any) {
+    navigate(route) { launchSingleTop = true }
+}
+
+/** Pops one screen and never the start destination, so a double tap on back cannot empty the stack. */
+private fun NavHostController.back() {
+    if (previousBackStackEntry != null) popBackStack()
 }
