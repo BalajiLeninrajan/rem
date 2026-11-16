@@ -1,6 +1,8 @@
 package dev.balaji.rem.ring
 
 import android.content.Context
+import androidx.core.content.ContextCompat
+import dev.balaji.rem.R
 import dev.balaji.rem.di.AppContainer
 
 /**
@@ -10,12 +12,22 @@ import dev.balaji.rem.di.AppContainer
  * The notifier must not read `container.ringController` or `container.alarmScheduler`
  * while it is being constructed, because the scheduler reads the notifier.
  */
-fun createRingController(
-    @Suppress("UNUSED_PARAMETER") context: Context,
-    @Suppress("UNUSED_PARAMETER") container: AppContainer,
-): RingController = IdleRingController()
+fun createRingController(context: Context, container: AppContainer): RingController =
+    DefaultRingController(
+        alarms = container.alarmRepository,
+        barcodes = container.barcodeRepository,
+        sessions = container.sleepSessionRepository,
+        settings = container.settingsRepository,
+        ringState = container.ringStateStore,
+        notifier = container.alarmNotifier,
+        launcher = { ring -> ContextCompat.startForegroundService(context, RingContract.serviceIntent(context, ring)) },
+        reschedule = { container.alarmScheduler.rescheduleAll() },
+        clock = container.clock,
+        scope = container.applicationScope,
+        testAlarmLabel = context.getString(R.string.ring_test_alarm_label),
+    )
 
 fun createAlarmNotifier(
-    @Suppress("UNUSED_PARAMETER") context: Context,
+    context: Context,
     @Suppress("UNUSED_PARAMETER") container: AppContainer,
-): AlarmNotifier = NoOpAlarmNotifier()
+): AlarmNotifier = RingNotifications(context)
