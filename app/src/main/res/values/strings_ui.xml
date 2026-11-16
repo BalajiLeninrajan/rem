@@ -1,3 +1,220 @@
 <resources>
     <!-- Strings owned by the ui package. Prefix every name with ui_. -->
+
+    <!-- Shared actions -->
+    <string name="ui_action_back">Back</string>
+    <string name="ui_action_more">More options</string>
+    <string name="ui_action_delete">Delete</string>
+    <string name="ui_action_undo">Undo</string>
+    <string name="ui_action_cancel">Cancel</string>
+    <string name="ui_action_ok">OK</string>
+    <string name="ui_action_save">Save</string>
+    <string name="ui_action_continue">Continue</string>
+    <string name="ui_action_open_settings">Open settings</string>
+    <string name="ui_action_rename">Rename</string>
+    <string name="ui_action_done">Done</string>
+    <string name="ui_action_retry">Try again</string>
+
+    <!-- Units. The argument is a whole number. -->
+    <string name="ui_unit_minutes">%d min</string>
+    <string name="ui_unit_seconds">%d s</string>
+    <string name="ui_unit_percent">%d%%</string>
+
+    <!-- Ring times. %s is a clock time such as 06:45. -->
+    <string name="ui_time_tomorrow">tomorrow %s</string>
+    <!-- %1$s is a short day name such as Wed, %2$s a clock time. -->
+    <string name="ui_time_on_day">%1$s %2$s</string>
+
+    <string name="ui_repeat_once">Once</string>
+    <string name="ui_repeat_every_day">Every day</string>
+    <string name="ui_repeat_weekdays">Weekdays</string>
+    <string name="ui_repeat_weekends">Weekends</string>
+
+    <!-- %1$s is the ring time, %2$s one of the ui_explain strings. -->
+    <string name="ui_rings_line">Rings %1$s, %2$s</string>
+    <!-- %1$d sleep cycles, %2$d minutes, %3$s the must-wake-by time. -->
+    <plurals name="ui_explain_cycles_early">
+        <item quantity="one">%1$d cycle, %2$d min before %3$s</item>
+        <item quantity="other">%1$d cycles, %2$d min before %3$s</item>
+    </plurals>
+    <plurals name="ui_explain_cycles_on_deadline">
+        <item quantity="one">%d cycle, ending right on time</item>
+        <item quantity="other">%d cycles, ending right on time</item>
+    </plurals>
+    <string name="ui_explain_no_session">no sleep session</string>
+    <string name="ui_explain_outside_session">outside this sleep session</string>
+    <string name="ui_explain_before_first_cycle">too soon for a full cycle</string>
+    <string name="ui_explain_no_cycle_in_window">no cycle ends inside the early window</string>
+    <string name="ui_explain_cycle_passed">the last cycle in the window has passed</string>
+
+    <!-- Home -->
+    <string name="ui_home_add_alarm">Alarm</string>
+    <!-- %s is the alarm time. Read by screen readers for the switch. -->
+    <string name="ui_home_alarm_switch">Alarm at %s</string>
+    <!-- %1$s is the alarm label, %2$s the repeat summary. -->
+    <string name="ui_home_label_and_repeat">%1$s, %2$s</string>
+    <string name="ui_home_ringing_now">Ringing now</string>
+    <string name="ui_home_alarm_off">Off</string>
+    <string name="ui_home_scheduling">Working out the ring time</string>
+    <string name="ui_home_alarm_deleted">Alarm deleted</string>
+    <string name="ui_home_empty_title">No alarms yet</string>
+    <string name="ui_home_empty_body">Add the time you must be up by. rem picks the ring time from your sleep cycles.</string>
+    <string name="ui_home_going_to_sleep">Going to sleep</string>
+    <!-- %1$s is the ring time, %2$s one of the ui_explain strings. -->
+    <string name="ui_home_sleep_preview">Press when you put the phone down. Sleep now and it rings %1$s, %2$s.</string>
+    <string name="ui_home_sleep_no_alarm">No alarm is due in the next 16 hours, so there is nothing to time yet.</string>
+    <!-- %s is a clock time. -->
+    <string name="ui_home_asleep_since">Asleep since %s</string>
+    <string name="ui_home_rings_at">Rings at</string>
+    <string name="ui_home_session_no_alarm">No alarm is due during this sleep session.</string>
+    <string name="ui_home_end_sleep">I\'m up</string>
+    <string name="ui_home_warning_no_barcode">No barcode is registered. Until you add one, a ringing alarm stops with a plain button.</string>
+    <string name="ui_home_warning_no_barcode_action">Add a barcode</string>
+    <plurals name="ui_home_warning_reliability">
+        <item quantity="one">%d reliability check is failing. An alarm may not ring or may not show.</item>
+        <item quantity="other">%d reliability checks are failing. An alarm may not ring or may not show.</item>
+    </plurals>
+    <string name="ui_home_warning_reliability_action">Review</string>
+
+    <!-- Alarm editor -->
+    <string name="ui_editor_title_new">New alarm</string>
+    <string name="ui_editor_title_edit">Edit alarm</string>
+    <string name="ui_editor_must_wake_by">Must wake by</string>
+    <string name="ui_editor_use_dial">Switch to the clock dial</string>
+    <string name="ui_editor_use_keyboard">Switch to keyboard entry</string>
+    <!-- %1$s is the ring time, %2$s one of the ui_explain strings. -->
+    <string name="ui_editor_preview_session">Would ring %1$s, %2$s</string>
+    <!-- %s is the ring time. -->
+    <string name="ui_editor_preview_no_session">Would ring %s. Earlier if you press going to sleep.</string>
+    <string name="ui_editor_repeat">Repeat</string>
+    <string name="ui_editor_repeat_once_hint">No day selected. The alarm rings once and then turns off.</string>
+    <string name="ui_editor_label">Label</string>
+    <string name="ui_editor_label_too_long">Keep the label to %d characters or fewer</string>
+    <string name="ui_editor_headphones_only">Headphones only</string>
+    <!-- %s is a duration such as 120 s. -->
+    <string name="ui_editor_headphones_only_description">Stays off the phone speaker while headphones are connected. Moves to the speaker after %s without dismissal.</string>
+    <string name="ui_editor_vibrate">Vibrate</string>
+    <string name="ui_editor_ringtone">Alarm sound</string>
+    <string name="ui_editor_ringtone_default">rem default tone</string>
+    <string name="ui_editor_ringtone_custom">Custom sound</string>
+    <string name="ui_editor_ringtone_reset">Use the rem default tone</string>
+    <string name="ui_editor_ringtone_picker_missing">This phone has no sound picker</string>
+    <string name="ui_editor_delete_title">Delete this alarm?</string>
+
+    <!-- Barcodes -->
+    <string name="ui_barcodes_add">Add barcode</string>
+    <string name="ui_barcodes_test_scan">Test scan</string>
+    <string name="ui_barcodes_intro">Scanning any one of these stops a ringing alarm. Pick things that stay far from your bed.</string>
+    <string name="ui_barcodes_empty">No barcodes yet. Add one from something that stays far from your bed, like the toothpaste in the bathroom. Scanning it will be the only way to stop an alarm.</string>
+    <string name="ui_barcodes_label">Name</string>
+    <string name="ui_barcodes_rename_title">Rename barcode</string>
+    <!-- %s is the barcode name. -->
+    <string name="ui_barcodes_delete_title">Delete %s?</string>
+    <string name="ui_barcodes_delete_body">Scanning it will no longer stop an alarm.</string>
+    <string name="ui_barcodes_delete_last">This is your only barcode. Without one, a ringing alarm stops with a plain button.</string>
+    <string name="ui_barcodes_camera_rationale_title">Camera access</string>
+    <string name="ui_barcodes_camera_rationale">rem uses the camera to read barcodes, here and when an alarm rings. Images are read on the phone and are not stored or sent anywhere.</string>
+    <string name="ui_barcodes_camera_denied_title">Camera access is off</string>
+    <string name="ui_barcodes_camera_denied">Without the camera rem cannot read barcodes. You can allow it in the app settings.</string>
+    <!-- %1$s is the format name such as EAN-13, %2$s the value. -->
+    <string name="ui_barcode_format_and_value">%1$s, %2$s</string>
+    <string name="ui_barcode_format_ean_13">EAN-13</string>
+    <string name="ui_barcode_format_ean_8">EAN-8</string>
+    <string name="ui_barcode_format_upc_a">UPC-A</string>
+    <string name="ui_barcode_format_upc_e">UPC-E</string>
+    <string name="ui_barcode_format_itf">ITF</string>
+    <string name="ui_barcode_format_code_39">Code 39</string>
+    <string name="ui_barcode_format_code_128">Code 128</string>
+    <string name="ui_barcode_format_qr">QR code</string>
+    <string name="ui_barcode_format_data_matrix">Data Matrix</string>
+    <string name="ui_barcode_format_other">Other format</string>
+
+    <!-- Barcode scan -->
+    <string name="ui_scan_hint">Hold the barcode in view until it is read.</string>
+    <string name="ui_scan_torch_on">Turn the torch on</string>
+    <string name="ui_scan_torch_off">Turn the torch off</string>
+    <string name="ui_scan_allow_camera">Allow camera</string>
+    <string name="ui_scan_camera_failed_title">The camera did not start</string>
+    <string name="ui_scan_camera_failed">Another app may be using it, or the phone may have camera use turned off.</string>
+    <string name="ui_scan_captured_title">Barcode read</string>
+    <string name="ui_scan_label_placeholder">Toothpaste</string>
+    <string name="ui_scan_again">Scan again</string>
+    <string name="ui_scan_another">Scan another</string>
+    <!-- %s is the barcode name. -->
+    <string name="ui_scan_duplicate_title">Already registered as %s</string>
+    <string name="ui_scan_test_match">Matches %s</string>
+    <string name="ui_scan_test_no_match">Not a registered barcode</string>
+
+    <!-- Settings -->
+    <string name="ui_settings_reset">Reset</string>
+    <string name="ui_settings_off">Off</string>
+    <string name="ui_settings_section_sleep">Sleep cycles</string>
+    <string name="ui_settings_section_ringing">Ringing</string>
+    <string name="ui_settings_cycle">Cycle length</string>
+    <string name="ui_settings_cycle_description">How long one sleep cycle lasts. Ring times land on the end of a cycle.</string>
+    <string name="ui_settings_cycle_note">Real cycles vary from about 70 to 120 minutes, between people and through the night. 90 is the usual average.</string>
+    <string name="ui_settings_fall_asleep">Time to fall asleep</string>
+    <string name="ui_settings_fall_asleep_description">Added after you press going to sleep, before the first cycle starts.</string>
+    <string name="ui_settings_early_window">Early window</string>
+    <string name="ui_settings_early_window_description">The most an alarm may ring before its must-wake-by time to catch the end of a cycle.</string>
+    <string name="ui_settings_min_volume">Minimum ring volume</string>
+    <string name="ui_settings_min_volume_description">The alarm volume is raised to this level and held there while it rings.</string>
+    <string name="ui_settings_ramp">Volume ramp</string>
+    <string name="ui_settings_ramp_description">How long the sound takes to reach full volume.</string>
+    <string name="ui_settings_speaker_fallback">Speaker fallback</string>
+    <string name="ui_settings_speaker_fallback_description">How long a headphones-only alarm rings before it moves to the phone speaker.</string>
+
+    <!-- Reliability -->
+    <string name="ui_reliability_intro">Everything an alarm needs from this phone. The list updates while this screen is open.</string>
+    <string name="ui_check_status_ok">Working</string>
+    <string name="ui_check_status_problem">Needs fixing</string>
+    <string name="ui_check_status_unknown">Cannot be checked</string>
+    <string name="ui_check_fix_allow">Allow</string>
+    <!-- For screen readers. %1$s is the button label, %2$s the check title. -->
+    <string name="ui_check_fix_description">%1$s, %2$s</string>
+    <string name="ui_check_notifications">Notifications</string>
+    <string name="ui_check_notifications_ok">Allowed. The ringing screen is opened by a notification.</string>
+    <string name="ui_check_notifications_problem">Blocked. Without notifications the alarm sounds but the ringing screen never opens.</string>
+    <string name="ui_check_full_screen">Full-screen alarm</string>
+    <string name="ui_check_full_screen_ok">Allowed. The ringing screen shows over the lock screen.</string>
+    <string name="ui_check_full_screen_problem">Not allowed. On a locked phone you would only get a small notification.</string>
+    <string name="ui_check_exact_alarms">Exact alarms</string>
+    <string name="ui_check_exact_alarms_ok">Allowed. Alarms ring at the exact minute.</string>
+    <string name="ui_check_exact_alarms_problem">Not allowed. Alarms cannot be scheduled at all.</string>
+    <string name="ui_check_dnd">Do Not Disturb</string>
+    <string name="ui_check_dnd_ok">Alarms can sound.</string>
+    <string name="ui_check_dnd_problem">Do Not Disturb is muting alarms right now. Allow alarms in its settings.</string>
+    <string name="ui_check_dnd_unknown">Do Not Disturb is on and rem cannot see whether it lets alarms through. Check that alarms are allowed.</string>
+    <string name="ui_check_background">Background use</string>
+    <string name="ui_check_background_ok">Not restricted.</string>
+    <string name="ui_check_background_problem">Restricted. The phone may stop rem before an alarm rings. Set battery use to unrestricted.</string>
+    <string name="ui_check_camera">Camera</string>
+    <string name="ui_check_camera_ok">Allowed. Barcodes can be scanned.</string>
+    <string name="ui_check_camera_problem">Not allowed. You would have to type the 40 character code to stop an alarm.</string>
+    <string name="ui_check_barcode">Barcode</string>
+    <string name="ui_check_barcode_ok">At least one barcode is registered.</string>
+    <string name="ui_check_barcode_problem">None registered. A ringing alarm stops with a plain button.</string>
+    <string name="ui_test_alarm_title">Test it</string>
+    <string name="ui_test_alarm_body">Sets a real alarm one minute from now. Press the button, then lock the phone and wait.</string>
+    <!-- %s is a clock time. -->
+    <string name="ui_test_alarm_scheduled">Test alarm set for %s. Lock the phone now and wait. Stop it the same way as a real alarm.</string>
+    <string name="ui_test_alarm_button">Test alarm in 1 minute</string>
+    <string name="ui_oem_title">Battery managers</string>
+    <string name="ui_oem_generic">Some phones stop apps in the background to save battery, and alarms with them. dontkillmyapp.com lists the settings to change for each brand.</string>
+    <string name="ui_oem_huawei">Huawei and Honor phones stop background apps. In Settings, Battery, App launch, set rem to manage manually and allow all three options.</string>
+    <string name="ui_oem_xiaomi">Xiaomi phones block apps from starting after a reboot. In the app info for rem, turn on Autostart and set Battery saver to No restrictions.</string>
+    <string name="ui_oem_oneplus">OnePlus phones stop background apps. In the app info for rem, set Battery to Don\'t optimize and allow auto-launch.</string>
+    <string name="ui_oem_samsung">Samsung phones put unused apps to sleep. In Settings, Battery, Background usage limits, add rem to Never sleeping apps.</string>
+    <string name="ui_oem_oppo">Oppo and realme phones stop background apps. In the app info for rem, allow auto-launch and background activity.</string>
+    <string name="ui_oem_vivo">Vivo phones stop background apps. In Settings, Battery, Background power consumption management, allow rem. Also allow autostart.</string>
+    <string name="ui_oem_asus">Asus phones block apps from starting on their own. In Mobile Manager, Auto-start manager, allow rem.</string>
+    <string name="ui_oem_link">Open dontkillmyapp.com</string>
+
+    <!-- Onboarding -->
+    <string name="ui_onboarding_notifications_title">Alarms need notifications</string>
+    <string name="ui_onboarding_notifications_body">Android opens the ringing screen through a notification. If notifications are off, an alarm sounds but nothing shows on the lock screen. rem sends no other notifications, except to tell you an alarm was missed.</string>
+    <string name="ui_onboarding_notifications_allow">Allow notifications</string>
+    <string name="ui_onboarding_barcode_title">Pick a barcode to get up for</string>
+    <string name="ui_onboarding_barcode_body">A ringing alarm stops only when you scan a barcode you registered. Choose something away from your bed, like the toothpaste in the bathroom. There is no snooze.</string>
+    <string name="ui_onboarding_skip">Not now</string>
 </resources>
