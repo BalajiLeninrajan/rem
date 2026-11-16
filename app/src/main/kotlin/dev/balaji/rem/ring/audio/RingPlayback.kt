@@ -5,6 +5,8 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.util.Log
 import dev.balaji.rem.ring.RingSpec
+import dev.balaji.rem.ui.system.DoNotDisturb
+import dev.balaji.rem.ui.system.readDoNotDisturb
 import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -21,7 +23,7 @@ import kotlinx.coroutines.launch
  *
  * Call [start] and [stop] on the main thread.
  */
-internal class RingPlayback(context: Context, val spec: RingSpec) {
+internal class RingPlayback(private val context: Context, val spec: RingSpec) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val audioManager: AudioManager = context.getSystemService(AudioManager::class.java)
     private val player = AlarmAudioPlayer(context, scope)
@@ -43,7 +45,10 @@ internal class RingPlayback(context: Context, val spec: RingSpec) {
         .build()
 
     fun start() {
-        if (spec.vibrate) vibration.start()
+        // When Do Not Disturb mutes the tone, vibration is the only signal left, whatever the alarm says.
+        guarded("vibration") {
+            if (spec.vibrate || readDoNotDisturb(context) == DoNotDisturb.ALARMS_MUTED) vibration.start()
+        }
         // Other players pause when focus is granted. The alarm plays whether it is or not.
         guarded("audio focus") { audioManager.requestAudioFocus(focusRequest) }
         scope.launch {

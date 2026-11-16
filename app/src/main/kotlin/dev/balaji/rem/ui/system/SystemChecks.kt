@@ -38,11 +38,15 @@ fun readSystemChecks(context: Context): SystemChecks {
         fullScreenIntentAllowed =
             Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || notifications.canUseFullScreenIntent(),
         exactAlarmsAllowed = context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms(),
-        doNotDisturb = notifications.doNotDisturb(),
+        doNotDisturb = readDoNotDisturb(context),
         backgroundRestricted = context.getSystemService(ActivityManager::class.java).isBackgroundRestricted,
         cameraGranted = context.hasPermission(Manifest.permission.CAMERA),
     )
 }
+
+/** Whether Do Not Disturb lets an alarm sound right now. The ringing service asks this too. */
+fun readDoNotDisturb(context: Context): DoNotDisturb =
+    context.getSystemService(NotificationManager::class.java).doNotDisturb()
 
 fun Context.hasPermission(permission: String): Boolean =
     ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
