@@ -1,6 +1,7 @@
 package dev.balaji.rem.schedule
 
 import android.content.Context
+import android.util.Log
 import dev.balaji.rem.core.Alarm
 import dev.balaji.rem.core.SchedulePlan
 import dev.balaji.rem.core.ScheduledRing
@@ -18,6 +19,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,7 +61,17 @@ class AlarmManagerScheduler(
         scope.launch {
             combine(alarms.alarms, sessions.session, settings.settings, ringState.ringing) { _, _, _, _ -> }
                 .conflate()
-                .collect { rescheduleAll() }
+                .collect {
+                    // A failed run, for example a storage error, must not end the collection.
+                    // The next change or the next process start tries again.
+                    try {
+                        rescheduleAll()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Reschedule after a change failed", e)
+                    }
+                }
         }
     }
 
@@ -148,6 +160,7 @@ class AlarmManagerScheduler(
     }
 
     private companion object {
+        const val TAG = "AlarmManagerScheduler"
         val IN_FLIGHT_WINDOW: Duration = Duration.ofSeconds(2)
     }
 }
