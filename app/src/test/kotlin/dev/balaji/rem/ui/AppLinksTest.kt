@@ -8,7 +8,9 @@ import dev.balaji.rem.MainActivity
 import dev.balaji.rem.ui.navigation.AlarmEditorRoute
 import dev.balaji.rem.ui.navigation.ReliabilityRoute
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -28,6 +30,15 @@ class AppLinksTest {
         assertNull(AppLinks.routeFor(AppLinks.home(context)))
         assertEquals(AlarmEditorRoute(3), AppLinks.routeFor(AppLinks.editAlarm(context, 3)))
         assertEquals(ReliabilityRoute, AppLinks.routeFor(AppLinks.reliability(context)))
+    }
+
+    @Test
+    fun `links of different kinds never share a PendingIntent identity`() {
+        val edit = AppLinks.editAlarm(context, 3)
+
+        assertFalse(edit.filterEquals(AppLinks.reliability(context)))
+        assertFalse(edit.filterEquals(AppLinks.editAlarm(context, 4)))
+        assertTrue(edit.filterEquals(AppLinks.editAlarm(context, 3)))
     }
 
     @Test
