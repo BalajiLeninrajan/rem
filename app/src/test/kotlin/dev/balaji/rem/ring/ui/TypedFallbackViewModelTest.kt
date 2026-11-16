@@ -34,6 +34,43 @@ class TypedFallbackViewModelTest {
     }
 
     @Test
+    fun `a paste over selected text is refused even when the length grows by one`() {
+        val code = viewModel.code
+        val filler = "!".repeat(code.length - 1)
+        filler.indices.forEach { viewModel.onTyped(filler.take(it + 1)) }
+
+        viewModel.onTyped(code)
+
+        assertEquals(filler, viewModel.typed)
+    }
+
+    @Test
+    fun `a paste in front of typed text is refused`() {
+        val code = viewModel.code
+        val filler = "!".repeat(code.length - 1)
+        filler.indices.forEach { viewModel.onTyped(filler.take(it + 1)) }
+
+        // The field cuts the result to the code length, which would leave exactly the code.
+        viewModel.onTyped(code + filler)
+
+        assertEquals(filler, viewModel.typed)
+    }
+
+    @Test
+    fun `a replaced character is refused and a typo can be fixed in the middle`() {
+        viewModel.onTyped("a")
+        viewModel.onTyped("ab")
+        viewModel.onTyped("abc")
+
+        viewModel.onTyped("axc")
+        assertEquals("abc", viewModel.typed)
+
+        viewModel.onTyped("ac")
+        viewModel.onTyped("azc")
+        assertEquals("azc", viewModel.typed)
+    }
+
+    @Test
     fun `deleting is always allowed`() {
         val code = viewModel.code
         viewModel.onTyped(code.take(1))

@@ -33,7 +33,7 @@
     <string name="ring_scanner_unlock">Unlock phone</string>
     <string name="ring_scanner_type_instead">Type the code instead</string>
 
-    <string name="ring_typed_instruction">Type this code to stop the alarm. Pasting is off.</string>
+    <string name="ring_typed_instruction">Type this code to stop the alarm. Pasting does not work.</string>
     <string name="ring_typed_field_label">Code</string>
     <string name="ring_typed_progress">%1$d of %2$d correct</string>
     <string name="ring_typed_wrong">Character %1$d is wrong. Delete it and try again.</string>

@@ -52,15 +52,25 @@ internal class TypedFallbackViewModel(private val controller: RingController) : 
     val correctLength: Int get() = FallbackCode.correctPrefixLength(code, typed)
 
     /**
-     * Takes the new text of the field. The code has to be typed, so input that grows by
-     * more than one character at once (a paste, a suggestion) is refused.
+     * Takes the new text of the field. The code has to be typed, so the only changes
+     * accepted are one character put in and one run of characters taken out. A paste or
+     * a suggestion is refused, also when it replaces text and the length barely changes.
      */
     fun onTyped(input: String) {
         val cleaned = input.filterNot(Char::isWhitespace).take(FallbackCode.LENGTH)
-        if (cleaned.length > typed.length + 1) return
+        if (cleaned == typed) return
+        val oneTyped = cleaned.length == typed.length + 1 && isRunRemoved(from = cleaned, result = typed)
+        val someDeleted = cleaned.length < typed.length && isRunRemoved(from = typed, result = cleaned)
+        if (!oneTyped && !someDeleted) return
         typed = cleaned
         if (FallbackCode.matches(code, cleaned)) {
             viewModelScope.launch { controller.dismissWithTypedCode(cleaned) }
         }
+    }
+
+    /** Whether [result] is [from] with one stretch of characters cut out. */
+    private fun isRunRemoved(from: String, result: String): Boolean {
+        val kept = from.commonPrefixWith(result).length
+        return from.endsWith(result.substring(kept))
     }
 }
