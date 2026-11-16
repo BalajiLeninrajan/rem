@@ -1,0 +1,66 @@
+package dev.balaji.rem.core
+
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
+
+/**
+ * One alarm. [time] is the local "must wake by" time, the deadline. The alarm may ring
+ * earlier than this when a sleep session is active, never later.
+ *
+ * @property id 0 until the alarm has been saved.
+ * @property repeatDays empty means one-shot. A one-shot alarm is disabled when its ring ends.
+ * @property ringtoneUri null means the bundled default tone.
+ */
+data class Alarm(
+    val id: Long = NEW_ID,
+    val time: LocalTime,
+    val label: String = "",
+    val repeatDays: Set<DayOfWeek> = emptySet(),
+    val enabled: Boolean = true,
+    val headphonesOnly: Boolean = false,
+    val vibrate: Boolean = true,
+    val ringtoneUri: String? = null,
+) {
+    val isOneShot: Boolean get() = repeatDays.isEmpty()
+
+    /**
+     * The first deadline strictly after [after], as an instant.
+     *
+     * Computed from the local time on each candidate date, so a daylight saving shift moves
+     * the instant and keeps the wall clock time. A time inside a spring-forward gap resolves
+     * to the moment the gap starts being skipped (02:30 becomes 03:00 on that day), which is
+     * the earliest moment the wall clock has passed the deadline. A time inside a fall-back
+     * overlap resolves to its first occurrence and does not repeat an hour later.
+     */
+    fun nextDeadline(after: Instant, zone: ZoneId): Instant {
+        val today = after.atZone(zone).toLocalDate()
+        // Start one day back so a zone that skips a whole calendar day cannot hide an occurrence.
+        for (offset in -1L..SEARCH_DAYS) {
+            val date = today.plusDays(offset)
+            if (!isOneShot && date.dayOfWeek !in repeatDays) continue
+            val deadline = deadlineOn(date, time, zone)
+            if (deadline > after) return deadline
+        }
+        error("No occurrence of $time on $repeatDays within $SEARCH_DAYS days of $after in $zone")
+    }
+
+    companion object {
+        const val NEW_ID = 0L
+        private const val SEARCH_DAYS = 14L
+    }
+}
+
+private fun deadlineOn(date: LocalDate, time: LocalTime, zone: ZoneId): Instant {
+    val local = LocalDateTime.of(date, time)
+    val transition = zone.rules.getTransition(local)
+    return if (transition != null && transition.isGap) {
+        transition.instant
+    } else {
+        // In an overlap atZone picks the earlier offset, which is the first occurrence.
+        local.atZone(zone).toInstant()
+    }
+}
