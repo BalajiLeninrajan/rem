@@ -53,6 +53,7 @@ import dev.balaji.rem.core.PlannedRing
 import dev.balaji.rem.core.RepeatDays
 import dev.balaji.rem.core.WakeExplanation
 import dev.balaji.rem.di.containerViewModel
+import dev.balaji.rem.ring.RingContract
 import dev.balaji.rem.ui.components.CenteredContent
 import dev.balaji.rem.ui.components.WarningBanner
 import dev.balaji.rem.ui.components.WhileResumed
@@ -130,6 +131,7 @@ fun HomeScreen(
         onOpenBarcodes = onOpenBarcodes,
         onOpenSettings = onOpenSettings,
         onOpenReliability = onOpenReliability,
+        onOpenRinging = { context.startActivity(RingContract.activityIntent(context)) },
         modifier = modifier,
     )
 }
@@ -147,6 +149,7 @@ fun HomeContent(
     onOpenBarcodes: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenReliability: () -> Unit,
+    onOpenRinging: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -177,12 +180,11 @@ fun HomeContent(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         val header: @Composable () -> Unit = {
-            HomeHeader(state, onGoToSleep, onEndSleep, onOpenBarcodes, onOpenReliability)
+            HomeHeader(state, onGoToSleep, onEndSleep, onOpenBarcodes, onOpenReliability, onOpenRinging)
         }
         BoxWithConstraints(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            // Nothing is drawn until the stored alarms arrive, so the empty state does not flash.
             if (state.loading) {
-                Unit
+                // Nothing is drawn until the stored alarms arrive, so the empty state does not flash.
             } else if (maxWidth >= TwoPaneMinWidth && state.hasHeader) {
                 Row {
                     Column(
@@ -206,7 +208,7 @@ fun HomeContent(
 
 /** False when the header would draw nothing, so a wide window does not get an empty side pane. */
 private val HomeUiState.hasHeader: Boolean
-    get() = noBarcodes || reliabilityProblems > 0 || sleep != SleepState.Hidden
+    get() = ringing || noBarcodes || reliabilityProblems > 0 || sleep != SleepState.Hidden
 
 /** Warnings first, then the sleep control. Shared by the single column and the side pane. */
 @Composable
@@ -216,8 +218,16 @@ private fun HomeHeader(
     onEndSleep: () -> Unit,
     onOpenBarcodes: () -> Unit,
     onOpenReliability: () -> Unit,
+    onOpenRinging: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (state.ringing) {
+            WarningBanner(
+                message = stringResource(R.string.ui_home_warning_ringing),
+                actionLabel = stringResource(R.string.ui_home_warning_ringing_action),
+                onAction = onOpenRinging,
+            )
+        }
         if (state.noBarcodes) {
             WarningBanner(
                 message = stringResource(R.string.ui_home_warning_no_barcode),
@@ -333,6 +343,7 @@ private fun HomePreviewContent(state: HomeUiState) {
             onOpenBarcodes = {},
             onOpenSettings = {},
             onOpenReliability = {},
+            onOpenRinging = {},
         )
     }
 }

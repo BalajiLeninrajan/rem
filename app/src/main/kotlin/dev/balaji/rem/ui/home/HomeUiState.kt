@@ -29,6 +29,8 @@ data class HomeUiState(
     val loading: Boolean = true,
     val alarms: List<AlarmRow> = emptyList(),
     val sleep: SleepState = SleepState.Hidden,
+    /** True while any alarm rings, including the test alarm, which has no card. */
+    val ringing: Boolean = false,
     val noBarcodes: Boolean = false,
     /** Reliability checks that fail right now, not counting the missing barcode. */
     val reliabilityProblems: Int = 0,

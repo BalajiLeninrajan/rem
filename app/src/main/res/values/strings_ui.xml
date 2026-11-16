@@ -68,6 +68,8 @@
     <string name="ui_home_rings_at">Rings at</string>
     <string name="ui_home_session_no_alarm">No alarm is due during this sleep session.</string>
     <string name="ui_home_end_sleep">I\'m up</string>
+    <string name="ui_home_warning_ringing">An alarm is ringing. It stops only from the ringing screen.</string>
+    <string name="ui_home_warning_ringing_action">Open the ringing screen</string>
     <string name="ui_home_warning_no_barcode">No barcode is registered. Until you add one, a ringing alarm stops with a plain button.</string>
     <string name="ui_home_warning_no_barcode_action">Add a barcode</string>
     <plurals name="ui_home_warning_reliability">

@@ -130,7 +130,7 @@ class AlarmEditorViewModel(
                     label = current.label.trim(),
                     repeatDays = current.repeatDays,
                     // Saving a new time or new days means the user wants this alarm, so it is switched on.
-                    enabled = scheduleChanged || original?.enabled == true,
+                    enabled = scheduleChanged || original.enabled,
                     headphonesOnly = current.headphonesOnly,
                     vibrate = current.vibrate,
                     ringtoneUri = current.ringtoneUri,

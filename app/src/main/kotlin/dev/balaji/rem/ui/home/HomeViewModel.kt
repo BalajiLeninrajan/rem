@@ -117,6 +117,7 @@ class HomeViewModel(
                 stored.alarms.any { it.enabled } -> SleepState.Ready(sleepNowPreview(live.plan, stored.settings, live.now))
                 else -> SleepState.Hidden
             },
+            ringing = live.ringingAlarmId != null,
             noBarcodes = stored.barcodeCount == 0,
             reliabilityProblems = reliabilityProblemCount(live.system, stored.barcodeCount),
             onboardingNeeded = !stored.onboardingDone && !local.onboardingOpened,

@@ -11,6 +11,7 @@ import dev.balaji.rem.data.fake.InMemoryBarcodeRepository
 import dev.balaji.rem.data.fake.InMemorySettingsRepository
 import dev.balaji.rem.data.fake.InMemorySleepSessionRepository
 import dev.balaji.rem.ring.RingingState
+import dev.balaji.rem.schedule.AlarmBroadcast
 import dev.balaji.rem.ui.system.SystemChecks
 import dev.balaji.rem.ui.testing.FakeAlarmScheduler
 import dev.balaji.rem.ui.testing.FakeRingController
@@ -270,5 +271,26 @@ class HomeViewModelTest {
 
         val rows = viewModel.state.value.alarms.associate { it.alarm.id to it.ringing }
         assertEquals(mapOf(ringing to true, other to false), rows)
+        assertTrue(viewModel.state.value.ringing)
+    }
+
+    @Test
+    fun `a ringing test alarm has no card but is still reported`() = runTest {
+        val viewModel = viewModel()
+        val id = alarms.upsert(Alarm(time = LocalTime.of(7, 0)))
+        replan()
+        assertFalse(viewModel.state.value.ringing)
+
+        ringController.state.value = RingingState.Ringing(
+            alarmId = AlarmBroadcast.TEST_ALARM_ID,
+            label = "",
+            startedAt = clock.instant(),
+            deadline = clock.instant(),
+            requiresBarcode = false,
+        )
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.ringing)
+        assertEquals(mapOf(id to false), viewModel.state.value.alarms.associate { it.alarm.id to it.ringing })
     }
 }
