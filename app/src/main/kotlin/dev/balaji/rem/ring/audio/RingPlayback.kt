@@ -45,9 +45,18 @@ internal class RingPlayback(private val context: Context, val spec: RingSpec) {
         .build()
 
     fun start() {
-        // When Do Not Disturb mutes the tone, vibration is the only signal left, whatever the alarm says.
-        guarded("vibration") {
-            if (spec.vibrate || readDoNotDisturb(context) == DoNotDisturb.ALARMS_MUTED) vibration.start()
+        // When Do Not Disturb mutes the tone, vibration is tried whatever the alarm says. The system may
+        // block an alarm vibration together with the tone, so the reliability warning is the real defence.
+        var vibrate = spec.vibrate
+        guarded("do not disturb") { vibrate = vibrate || readDoNotDisturb(context) == DoNotDisturb.ALARMS_MUTED }
+        if (vibrate) {
+            // One request per cycle. The system cancels a vibration when the screen turns off, and the next cycle brings it back.
+            scope.launch {
+                while (true) {
+                    guarded("vibration") { vibration.pulse() }
+                    delay(AlarmVibration.PATTERN_LENGTH_MILLIS)
+                }
+            }
         }
         // Other players pause when focus is granted. The alarm plays whether it is or not.
         guarded("audio focus") { audioManager.requestAudioFocus(focusRequest) }

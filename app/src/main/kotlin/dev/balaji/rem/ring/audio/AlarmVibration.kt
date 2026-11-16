@@ -8,13 +8,17 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 
-/** Repeats a two-pulse pattern until [stop]. Alarm usage lets it run from the background and through Do Not Disturb rules for alarms. */
+/**
+ * Plays a two-pulse pattern, once per [pulse]. The caller repeats it, because the system
+ * cancels a vibration that repeats by itself when the screen turns off and nothing would
+ * start it again. Alarm usage lets it run from the background.
+ */
 internal class AlarmVibration(context: Context) {
     private val vibrator: Vibrator? = context.getSystemService(VibratorManager::class.java)?.defaultVibrator
 
-    fun start() {
+    fun pulse() {
         val target = vibrator?.takeIf { it.hasVibrator() } ?: return
-        val effect = VibrationEffect.createWaveform(PATTERN_MILLIS, 0)
+        val effect = VibrationEffect.createWaveform(PATTERN_MILLIS, NO_REPEAT)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 target.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
@@ -31,10 +35,14 @@ internal class AlarmVibration(context: Context) {
         vibrator?.cancel()
     }
 
-    private companion object {
-        const val TAG = "AlarmVibration"
+    companion object {
+        private const val TAG = "AlarmVibration"
+        private const val NO_REPEAT = -1
 
-        /** Wait, buzz, pause, buzz, long pause. Index 0 repeats the whole pattern. */
-        val PATTERN_MILLIS = longArrayOf(0, 500, 250, 500, 1000)
+        /** Wait, buzz, pause, buzz, long pause. */
+        private val PATTERN_MILLIS = longArrayOf(0, 500, 250, 500, 1000)
+
+        /** How long one [pulse] lasts, which is how often to call it. */
+        val PATTERN_LENGTH_MILLIS: Long = PATTERN_MILLIS.sum()
     }
 }
