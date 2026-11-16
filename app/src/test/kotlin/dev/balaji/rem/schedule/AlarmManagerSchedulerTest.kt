@@ -195,6 +195,23 @@ class AlarmManagerSchedulerTest {
     }
 
     @Test
+    fun `an alarm edited after it rang early rings again at its new time`() = runTest {
+        val scheduler = scheduler()
+        val id = alarms.upsert(sevenDaily)
+        sessions.start(clock.instant())
+        runCurrent()
+        clock.now = at("2026-01-15T06:50")
+        ringState.markFired(id, at("2026-01-15T07:00"))
+        scheduler.rescheduleAll()
+
+        alarms.upsert(sevenDaily.copy(id = id, time = LocalTime.of(6, 55)))
+        runCurrent()
+
+        val today = at("2026-01-15T06:55")
+        assertEquals(listOf(ScheduledRing(id, today, today)), alarmClocks())
+    }
+
+    @Test
     fun `a deadline that passed without a fire is reported once and the next occurrence is set`() = runTest {
         val scheduler = scheduler()
         val id = alarms.upsert(sevenDaily)

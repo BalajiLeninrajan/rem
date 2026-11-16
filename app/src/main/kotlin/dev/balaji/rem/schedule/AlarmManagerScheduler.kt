@@ -1,6 +1,7 @@
 package dev.balaji.rem.schedule
 
 import android.content.Context
+import dev.balaji.rem.core.Alarm
 import dev.balaji.rem.core.SchedulePlan
 import dev.balaji.rem.core.ScheduledRing
 import dev.balaji.rem.core.SleepSession
@@ -77,7 +78,7 @@ class AlarmManagerScheduler(
             // A one-shot alarm that is ringing has no next occurrence. The ring disables it when it ends.
             val ringingId = ringState.currentRinging()?.alarmId
             val candidates = stored.filterNot { it.isOneShot && it.id == ringingId }
-            val plan = planSchedule(candidates, session, settings.current(), clock, ringState.lastFired())
+            val plan = planSchedule(candidates, session, settings.current(), clock, firedOccurrences(stored))
 
             val plannedIds = plan.rings.mapTo(mutableSetOf()) { it.alarmId }
             (storedIds + previous.map { it.alarmId } - plannedIds).forEach(alarmClocks::cancel)
@@ -111,6 +112,19 @@ class AlarmManagerScheduler(
             .filter { ring -> ring.ringAt <= now && fired[ring.alarmId].let { it == null || it < ring.deadline } }
             .maxOfOrNull { it.ringAt.plus(IN_FLIGHT_WINDOW) } ?: return
         delay(Duration.between(now, settled).toMillis())
+    }
+
+    /**
+     * The fired deadlines that are still occurrences of their alarm. A fired deadline that
+     * lies ahead makes the plan skip to the occurrence after it. Once the alarm has been
+     * edited to another time or other days, the record belongs to an occurrence that no
+     * longer exists, and it must not hide the new one.
+     */
+    private suspend fun firedOccurrences(stored: List<Alarm>): Map<Long, Instant> {
+        val byId = stored.associateBy { it.id }
+        return ringState.lastFired().filter { (alarmId, deadline) ->
+            byId[alarmId]?.nextDeadline(deadline.minusMillis(1), clock.zone) == deadline
+        }
     }
 
     private suspend fun activeSession(now: Instant): SleepSession? {
