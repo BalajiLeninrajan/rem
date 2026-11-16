@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">rem</string>
+    <string name="placeholder_tagline">1rem = 90min</string>
+</resources>

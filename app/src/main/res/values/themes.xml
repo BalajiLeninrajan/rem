@@ -1,0 +1,7 @@
+<resources>
+    <!-- Window theme shown before Compose draws. RemTheme owns the real colors. -->
+    <style name="Theme.Rem" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>
