@@ -19,8 +19,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
  * size through [modifier]. The camera is bound while the composable is in composition and
  * the host lifecycle is started, and released when it leaves.
  *
- * It uses CameraX with the bundled ML Kit model, so it works offline and before the first
- * unlock. It reads EAN-13, EAN-8, UPC-A, UPC-E, QR, Code 128, Code 39, ITF and Data Matrix.
+ * It uses CameraX with the bundled ML Kit model, so it works offline. Whether the camera
+ * opens before the first unlock is not confirmed on a device. If it does not,
+ * [onCameraError] is called. It reads EAN-13, EAN-8, UPC-A, UPC-E, QR, Code 128, Code 39, ITF and Data Matrix.
  *
  * @param onBarcode called on the main thread once a barcode has been seen in 2 consecutive
  *   frames (`StableScanFilter` in :core). The same barcode is reported again only after a
@@ -67,7 +68,9 @@ fun BarcodeScanner(
             PreviewView(viewContext).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
         },
         update = { preview ->
-            if (preview.controller !== camera.controller) preview.controller = camera.controller
+            // Null until the camera is bound. Reading it here runs this block again once it is set.
+            val controller = camera.controller
+            if (preview.controller !== controller) preview.controller = controller
         },
         modifier = modifier,
     )

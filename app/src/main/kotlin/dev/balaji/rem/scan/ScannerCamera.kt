@@ -8,6 +8,9 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.mlkit.vision.MlKitAnalyzer
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.google.mlkit.common.MlKit
@@ -16,17 +19,18 @@ import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode as MlKitBarcode
 import dev.balaji.rem.core.StableScanFilter
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
 /** A camera error CameraX does not recover from by itself. [code] is a `CameraState.ERROR_*` constant. */
 internal class CameraFailure(val code: Int, cause: Throwable?) : Exception("Camera error $code", cause)
 
 /**
- * One camera session for [BarcodeScanner]: the CameraX controller, the bundled ML Kit
- * detector and the analysis thread. Create it, [bind] it once, [release] it once.
+ * One camera session for [BarcodeScanner]: the CameraX controller and the bundled ML Kit
+ * detector. Create it, [bind] it once, [release] it once.
  *
- * All three callbacks run on the main thread.
+ * Everything here runs on the main thread, the callbacks included. ML Kit detects on
+ * its own worker thread and hands its results to the main executor. That executor is
+ * never shut down, so a result or a cancellation that arrives after [release] has
+ * somewhere to land and is dropped there.
  */
 internal class ScannerCamera(
     context: Context,
@@ -36,38 +40,32 @@ internal class ScannerCamera(
 ) {
     private val appContext = context.applicationContext
     private val mainExecutor = ContextCompat.getMainExecutor(context)
-    private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
     /** Created in [bind], so a detector that cannot be built is reported like any other camera error. */
     private var detector: MlKitScanner? = null
 
-    /** Only touched on the analysis thread. */
+    /** Only touched on the main thread. */
     private val stableFilter = StableScanFilter()
 
-    @Volatile
     private var released = false
 
-    val controller = LifecycleCameraController(context)
+    /**
+     * Null until [bind] has built it. Building it starts CameraX, which can throw, for
+     * example before the first unlock, so that happens inside [bind] where a failure
+     * becomes [onError]. Compose state, so the preview picks the controller up once it exists.
+     */
+    var controller: LifecycleCameraController? by mutableStateOf(null)
+        private set
 
     fun bind(owner: LifecycleOwner) {
-        try {
-            val created = createDetector()
-            detector = created
-            controller.cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-            controller.setEnabledUseCases(CameraController.IMAGE_ANALYSIS)
-            controller.setImageAnalysisAnalyzer(
-                analysisExecutor,
-                // Barcode positions are not used, so no transform to view coordinates is needed.
-                MlKitAnalyzer(listOf(created), ImageAnalysis.COORDINATE_SYSTEM_ORIGINAL, analysisExecutor) { result ->
-                    onFrame(created, result)
-                },
-            )
-            controller.bindToLifecycle(owner)
+        val built = try {
+            build(owner)
         } catch (e: RuntimeException) {
             onError(e)
             return
         }
-        val ready = controller.initializationFuture
+        controller = built
+        val ready = built.initializationFuture
         ready.addListener(
             {
                 try {
@@ -81,11 +79,28 @@ internal class ScannerCamera(
         )
     }
 
+    private fun build(owner: LifecycleOwner): LifecycleCameraController {
+        val created = createDetector()
+        detector = created
+        val built = LifecycleCameraController(appContext)
+        built.cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+        built.setEnabledUseCases(CameraController.IMAGE_ANALYSIS)
+        built.setImageAnalysisAnalyzer(
+            mainExecutor,
+            // Barcode positions are not used, so no transform to view coordinates is needed.
+            MlKitAnalyzer(listOf(created), ImageAnalysis.COORDINATE_SYSTEM_ORIGINAL, mainExecutor) { result ->
+                onFrame(created, result)
+            },
+        )
+        built.bindToLifecycle(owner)
+        return built
+    }
+
     fun setTorch(enabled: Boolean) {
         if (released) return
         try {
             // Before the camera is bound the controller keeps the value and applies it later.
-            controller.enableTorch(enabled)
+            controller?.enableTorch(enabled)
         } catch (e: RuntimeException) {
             Log.w(TAG, "Torch change failed", e)
         }
@@ -94,13 +109,16 @@ internal class ScannerCamera(
     fun release() {
         released = true
         try {
-            controller.clearImageAnalysisAnalyzer()
-            controller.unbind()
+            controller?.clearImageAnalysisAnalyzer()
+            controller?.unbind()
         } catch (e: RuntimeException) {
             Log.w(TAG, "Camera unbind failed", e)
         }
-        detector?.close()
-        analysisExecutor.shutdown()
+        try {
+            detector?.close()
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Detector close failed", e)
+        }
     }
 
     /**
@@ -117,7 +135,7 @@ internal class ScannerCamera(
     }
 
     private fun onReady(owner: LifecycleOwner) {
-        val info = controller.cameraInfo
+        val info = controller?.cameraInfo
         onTorchAvailable(info?.hasFlashUnit() == true)
         info?.cameraState?.observe(owner) { state ->
             val error = state.error ?: return@observe
@@ -126,17 +144,14 @@ internal class ScannerCamera(
         }
     }
 
-    /** Runs on the analysis thread, once per analysed frame. */
+    /** Runs on the main thread, once per analysed frame. */
     private fun onFrame(source: MlKitScanner, result: MlKitAnalyzer.Result) {
         if (released) return
         val seen = result.getValue(source).orEmpty().mapNotNull { barcode ->
             barcode.rawValue?.let { ScannedBarcode.fromMlKit(barcode.format, it).toScannedCode() }
         }
         val stable = stableFilter.onFrame(seen)
-        if (stable.isEmpty()) return
-        mainExecutor.execute {
-            if (!released) stable.forEach { onBarcode(ScannedBarcode(it.format, it.rawValue)) }
-        }
+        stable.forEach { onBarcode(ScannedBarcode(it.format, it.rawValue)) }
     }
 
     private companion object {

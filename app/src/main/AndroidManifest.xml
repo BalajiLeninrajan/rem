@@ -63,9 +63,14 @@
             </intent-filter>
         </activity>
 
-        <!-- Shown over the lock screen by the full-screen intent of the ringing notification. -->
+        <!--
+            Shown over the lock screen by the full-screen intent of the ringing notification.
+            It handles rotation and size changes itself, so tilting the phone to aim at a
+            barcode does not tear the scanner down in the middle of a ring.
+        -->
         <activity
             android:name=".ring.RingingActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:directBootAware="true"
             android:excludeFromRecents="true"
             android:exported="false"
