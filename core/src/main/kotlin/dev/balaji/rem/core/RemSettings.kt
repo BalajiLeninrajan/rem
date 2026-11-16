@@ -4,7 +4,7 @@ package dev.balaji.rem.core
  * Global settings. Stored values may be out of range (old versions, hand edits), so
  * repositories pass everything they read or write through [coerced].
  */
-data class Settings(
+data class RemSettings(
     val cycleMinutes: Int = 90,
     val fallAsleepMinutes: Int = 15,
     val earlyWindowMinutes: Int = 30,
@@ -13,7 +13,7 @@ data class Settings(
     /** 0 disables the ramp. */
     val volumeRampSeconds: Int = 30,
 ) {
-    fun coerced(): Settings = Settings(
+    fun coerced(): RemSettings = RemSettings(
         cycleMinutes = cycleMinutes.coerceIn(CYCLE_MINUTES),
         fallAsleepMinutes = fallAsleepMinutes.coerceIn(FALL_ASLEEP_MINUTES),
         earlyWindowMinutes = earlyWindowMinutes.coerceIn(EARLY_WINDOW_MINUTES),
@@ -23,7 +23,7 @@ data class Settings(
     )
 
     companion object {
-        val DEFAULT = Settings()
+        val DEFAULT = RemSettings()
 
         val CYCLE_MINUTES = 60..120
         val FALL_ASLEEP_MINUTES = 0..60

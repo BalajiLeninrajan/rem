@@ -35,7 +35,7 @@ data class SchedulePlan(val rings: List<PlannedRing> = emptyList()) {
 fun planSchedule(
     alarms: Collection<Alarm>,
     session: SleepSession?,
-    settings: Settings,
+    settings: RemSettings,
     clock: Clock,
     lastFired: Map<Long, Instant> = emptyMap(),
 ): SchedulePlan {

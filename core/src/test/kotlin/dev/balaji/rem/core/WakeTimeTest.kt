@@ -18,7 +18,7 @@ class WakeTimeTest {
         val deadline: String,
         val expectedRing: String,
         val expected: WakeExplanation,
-        val settings: Settings = Settings(),
+        val settings: RemSettings = RemSettings(),
         /** Defaults to the session start, or to an hour before the deadline without a session. */
         val now: String? = null,
     )
@@ -49,7 +49,7 @@ class WakeTimeTest {
         ),
         Case(
             "deadline exactly 16 hours after the session start is covered", "2026-01-14T15:00", "2026-01-15T07:00",
-            "2026-01-15T06:45", Cycles(10, 15), Settings(fallAsleepMinutes = 45),
+            "2026-01-15T06:45", Cycles(10, 15), RemSettings(fallAsleepMinutes = 45),
         ),
         Case(
             "deadline before the session start", "2026-01-15T08:00", "2026-01-15T07:00", "2026-01-15T07:00",
@@ -65,28 +65,28 @@ class WakeTimeTest {
         ),
         Case(
             "zero window only accepts an exact hit", "2026-01-14T23:14", "2026-01-15T07:00", "2026-01-15T07:00",
-            AtDeadline(NO_CYCLE_IN_WINDOW), Settings(earlyWindowMinutes = 0),
+            AtDeadline(NO_CYCLE_IN_WINDOW), RemSettings(earlyWindowMinutes = 0),
         ),
         Case(
             "zero window, exact hit", "2026-01-14T23:15", "2026-01-15T07:00", "2026-01-15T07:00",
-            Cycles(5, 0), Settings(earlyWindowMinutes = 0),
+            Cycles(5, 0), RemSettings(earlyWindowMinutes = 0),
         ),
         Case(
             "two boundaries in the window, latest wins", "2026-01-14T23:00", "2026-01-15T07:00", "2026-01-15T06:15",
-            Cycles(7, 45), Settings(cycleMinutes = 60, earlyWindowMinutes = 90),
+            Cycles(7, 45), RemSettings(cycleMinutes = 60, earlyWindowMinutes = 90),
         ),
         Case(
             "no fall asleep delay", "2026-01-14T23:00", "2026-01-15T07:00", "2026-01-15T06:30",
-            Cycles(5, 30), Settings(fallAsleepMinutes = 0),
+            Cycles(5, 30), RemSettings(fallAsleepMinutes = 0),
         ),
         Case(
             "long cycles", "2026-01-14T23:00", "2026-01-15T07:30", "2026-01-15T07:15",
-            Cycles(4, 15), Settings(cycleMinutes = 120),
+            Cycles(4, 15), RemSettings(cycleMinutes = 120),
         ),
         // Spring forward night: 23:00 EST to 07:00 EDT is only seven hours of real time.
         Case(
             "spring forward removes a cycle", "2026-03-07T23:00", "2026-03-08T07:00", "2026-03-08T06:15",
-            Cycles(4, 45), Settings(earlyWindowMinutes = 45),
+            Cycles(4, 45), RemSettings(earlyWindowMinutes = 45),
         ),
         Case(
             "spring forward, default window", "2026-03-07T23:00", "2026-03-08T07:00", "2026-03-08T07:00",
@@ -95,7 +95,7 @@ class WakeTimeTest {
         // Fall back night: 23:00 EDT to 07:00 EST is nine hours of real time.
         Case(
             "fall back fits a sixth cycle", "2026-10-31T23:00", "2026-11-01T07:00", "2026-11-01T07:00",
-            Cycles(6, 0), Settings(fallAsleepMinutes = 0),
+            Cycles(6, 0), RemSettings(fallAsleepMinutes = 0),
         ),
         Case(
             "fall back, default settings", "2026-10-31T23:00", "2026-11-01T07:00", "2026-11-01T07:00",
@@ -122,7 +122,7 @@ class WakeTimeTest {
     fun `out of range settings are coerced instead of trusted`() {
         val session = SleepSession(toronto("2026-01-14T23:00"))
         val deadline = toronto("2026-01-15T07:00")
-        val broken = Settings(cycleMinutes = 0, fallAsleepMinutes = -5, earlyWindowMinutes = 1000)
+        val broken = RemSettings(cycleMinutes = 0, fallAsleepMinutes = -5, earlyWindowMinutes = 1000)
 
         val wake = computeWakeTime(deadline, session, broken, session.startedAt)
 

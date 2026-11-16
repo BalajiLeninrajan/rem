@@ -17,7 +17,7 @@ data class SleepSession(val startedAt: Instant) {
      * When the user is assumed to fall asleep. Cut to the whole minute so every cycle
      * boundary, and so every ring time, lands on a whole minute.
      */
-    fun sleepOnset(settings: Settings): Instant =
+    fun sleepOnset(settings: RemSettings): Instant =
         startedAt.plus(Duration.ofMinutes(settings.fallAsleepMinutes.toLong())).truncatedTo(ChronoUnit.MINUTES)
 
     companion object {

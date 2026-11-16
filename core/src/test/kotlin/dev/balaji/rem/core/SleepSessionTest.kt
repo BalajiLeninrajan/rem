@@ -29,7 +29,7 @@ class SleepSessionTest {
     @Test
     fun `sleep onset adds the fall asleep time and drops seconds`() {
         val withSeconds = SleepSession(start.plusSeconds(42))
-        assertEquals(toronto("2026-01-14T23:15"), withSeconds.sleepOnset(Settings()))
-        assertEquals(start, withSeconds.sleepOnset(Settings(fallAsleepMinutes = 0)))
+        assertEquals(toronto("2026-01-14T23:15"), withSeconds.sleepOnset(RemSettings()))
+        assertEquals(start, withSeconds.sleepOnset(RemSettings(fallAsleepMinutes = 0)))
     }
 }

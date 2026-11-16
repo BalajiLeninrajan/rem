@@ -4,60 +4,25 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.runtime.CompositionLocalProvider
+import dev.balaji.rem.di.LocalAppContainer
+import dev.balaji.rem.di.appContainer
+import dev.balaji.rem.ui.AppLinks
+import dev.balaji.rem.ui.navigation.RemNavHost
 import dev.balaji.rem.ui.theme.RemTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // After a configuration change the back stack is restored, so the link is not followed twice.
+        val linkedRoute = if (savedInstanceState == null) AppLinks.routeFor(intent) else null
         setContent {
             RemTheme {
-                PlaceholderScreen()
+                CompositionLocalProvider(LocalAppContainer provides appContainer) {
+                    RemNavHost(linkedRoute = linkedRoute)
+                }
             }
         }
-    }
-}
-
-@Composable
-fun PlaceholderScreen(modifier: Modifier = Modifier) {
-    Scaffold(modifier = modifier.fillMaxSize()) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.displayLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = stringResource(R.string.placeholder_tagline),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun PlaceholderScreenPreview() {
-    RemTheme {
-        PlaceholderScreen()
     }
 }

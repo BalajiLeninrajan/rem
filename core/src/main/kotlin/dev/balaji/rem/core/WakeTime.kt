@@ -44,7 +44,7 @@ object RingLimits {
  * early window and not already in the past. In every other case the alarm rings at the
  * deadline. The result is never after the deadline and never before [now].
  */
-fun computeWakeTime(deadline: Instant, session: SleepSession?, settings: Settings, now: Instant): WakeTime {
+fun computeWakeTime(deadline: Instant, session: SleepSession?, settings: RemSettings, now: Instant): WakeTime {
     fun atDeadline(reason: DeadlineReason) = WakeTime(maxOf(deadline, now), WakeExplanation.AtDeadline(reason))
 
     if (session == null) return atDeadline(DeadlineReason.NO_SESSION)

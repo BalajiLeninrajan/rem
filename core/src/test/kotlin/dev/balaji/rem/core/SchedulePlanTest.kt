@@ -12,7 +12,7 @@ import org.junit.Test
 class SchedulePlanTest {
     private val seven = Alarm(id = 1, time = LocalTime.of(7, 0), repeatDays = RepeatDays.EVERY_DAY)
     private val eight = Alarm(id = 2, time = LocalTime.of(8, 0))
-    private val settings = Settings()
+    private val settings = RemSettings()
 
     @Test
     fun `without a session every enabled alarm rings at its deadline`() {
