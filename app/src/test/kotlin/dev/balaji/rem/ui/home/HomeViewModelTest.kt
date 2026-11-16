@@ -24,7 +24,9 @@ import java.time.LocalTime
 import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -178,7 +180,7 @@ class HomeViewModelTest {
         replan()
 
         viewModel.delete(stored.id)
-        advanceUntilIdle()
+        runCurrent()
 
         assertTrue(alarms.all().isEmpty())
         assertTrue(viewModel.state.value.alarms.isEmpty())
@@ -192,6 +194,22 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `the undo offer ends by itself, so it cannot come back after leaving the screen`() = runTest {
+        val viewModel = viewModel()
+        val stored = Alarm(time = LocalTime.of(7, 0)).let { it.copy(id = alarms.upsert(it)) }
+
+        viewModel.delete(stored.id)
+        advanceTimeBy(9_000)
+        runCurrent()
+        assertEquals(stored, viewModel.state.value.recentlyDeleted)
+
+        advanceTimeBy(2_000)
+        runCurrent()
+        assertNull(viewModel.state.value.recentlyDeleted)
+        assertTrue(alarms.all().isEmpty())
+    }
+
+    @Test
     fun `an expired undo only clears its own offer`() = runTest {
         val viewModel = viewModel()
         val first = Alarm(time = LocalTime.of(7, 0)).let { it.copy(id = alarms.upsert(it)) }
@@ -199,13 +217,13 @@ class HomeViewModelTest {
 
         viewModel.delete(first.id)
         viewModel.delete(second.id)
-        advanceUntilIdle()
+        runCurrent()
         viewModel.onUndoExpired(first)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(second, viewModel.state.value.recentlyDeleted)
 
         viewModel.onUndoExpired(second)
-        advanceUntilIdle()
+        runCurrent()
         assertNull(viewModel.state.value.recentlyDeleted)
         assertTrue(alarms.all().isEmpty())
     }

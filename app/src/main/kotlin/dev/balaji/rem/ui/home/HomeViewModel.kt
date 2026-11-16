@@ -19,6 +19,8 @@ import dev.balaji.rem.ui.reliability.reliabilityProblemCount
 import dev.balaji.rem.ui.system.SystemChecks
 import java.time.Clock
 import java.time.Instant
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +41,7 @@ class HomeViewModel(
     private val system = MutableStateFlow(SystemChecks())
     private val recentlyDeleted = MutableStateFlow<Alarm?>(null)
     private val onboardingOpened = MutableStateFlow(false)
+    private var undoExpiry: Job? = null
 
     private val stored = combine(
         alarms.alarms,
@@ -74,11 +77,19 @@ class HomeViewModel(
             val alarm = alarms.get(alarmId) ?: return@launch
             alarms.delete(alarmId)
             recentlyDeleted.value = alarm
+            // The offer ends here and not in the screen. A snackbar that is cut short by leaving
+            // the screen or rotating never reports back, and the offer would return for another round.
+            undoExpiry?.cancel()
+            undoExpiry = viewModelScope.launch {
+                delay(UNDO_OFFER_MILLIS)
+                recentlyDeleted.compareAndSet(alarm, null)
+            }
         }
     }
 
     fun undoDelete() {
         val alarm = recentlyDeleted.value ?: return
+        undoExpiry?.cancel()
         recentlyDeleted.value = null
         viewModelScope.launch { alarms.upsert(alarm) }
     }
@@ -141,6 +152,9 @@ class HomeViewModel(
 
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
+
+        /** As long as a snackbar with an action stays up. */
+        const val UNDO_OFFER_MILLIS = 10_000L
     }
 }
 
