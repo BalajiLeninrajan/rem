@@ -43,6 +43,10 @@ class RingingActivity : ComponentActivity() {
         }
     }
 
+    /** The first place a key event reaches, before any view or the Compose content can use it. */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        isVolumeKey(event.keyCode) || super.dispatchKeyEvent(event)
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean =
         isVolumeKey(keyCode) || super.onKeyDown(keyCode, event)
 
