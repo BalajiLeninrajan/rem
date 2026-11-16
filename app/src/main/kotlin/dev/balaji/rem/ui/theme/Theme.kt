@@ -25,6 +25,8 @@ fun RemTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = RemTypography,
+        shapes = RemShapes,
         content = content,
     )
 }
