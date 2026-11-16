@@ -28,7 +28,9 @@
     <string name="ring_scanner_back">Back</string>
     <string name="ring_scanner_needs_permission">The camera permission is missing. Allow it, or type the code instead. If the phone is locked, unlock it first.</string>
     <string name="ring_scanner_camera_failed">The camera did not open. Try again, or type the code instead. If the phone is locked, unlocking it can help.</string>
+    <string name="ring_scanner_permission_blocked">The camera permission is off and the phone will not ask again. Type the code instead, or allow the camera in the app settings. If the phone is locked, it asks you to unlock first.</string>
     <string name="ring_scanner_allow_camera">Allow camera</string>
+    <string name="ring_scanner_open_settings">Open app settings</string>
     <string name="ring_scanner_try_again">Try again</string>
     <string name="ring_scanner_unlock">Unlock phone</string>
     <string name="ring_scanner_type_instead">Type the code instead</string>

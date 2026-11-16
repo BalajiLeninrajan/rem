@@ -41,12 +41,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.balaji.rem.R
 import dev.balaji.rem.di.containerViewModel
 import dev.balaji.rem.scan.BarcodeScanner
+import dev.balaji.rem.ui.system.SystemSettings
 
 /** Scans a barcode to dismiss the ring. */
 @Composable
@@ -60,6 +62,8 @@ fun RingScannerScreen(
     val viewModel = containerViewModel { RingScannerViewModel(it.ringController) }
 
     var hasPermission by remember { mutableStateOf(context.hasCameraPermission()) }
+    // True once the system refused without asking, or will not ask again. Then only the app settings can grant it.
+    var askingBlocked by remember { mutableStateOf(false) }
     var cameraFailed by remember { mutableStateOf(false) }
     var cameraAttempt by remember { mutableIntStateOf(0) }
     var torchOn by rememberSaveable { mutableStateOf(false) }
@@ -72,6 +76,8 @@ fun RingScannerScreen(
     }
     val permissionRequest = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasPermission = granted
+        askingBlocked = !granted &&
+            (activity == null || !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.CAMERA))
     }
     // The permission is normally granted when a barcode is registered. This covers a later revocation.
     LaunchedEffect(Unit) {
@@ -108,12 +114,27 @@ fun RingScannerScreen(
             } else {
                 ScannerProblem(
                     message = stringResource(
-                        if (hasPermission) R.string.ring_scanner_camera_failed else R.string.ring_scanner_needs_permission,
+                        when {
+                            hasPermission -> R.string.ring_scanner_camera_failed
+                            askingBlocked -> R.string.ring_scanner_permission_blocked
+                            else -> R.string.ring_scanner_needs_permission
+                        },
                     ),
                     primaryLabel = stringResource(
-                        if (hasPermission) R.string.ring_scanner_try_again else R.string.ring_scanner_allow_camera,
+                        when {
+                            hasPermission -> R.string.ring_scanner_try_again
+                            askingBlocked -> R.string.ring_scanner_open_settings
+                            else -> R.string.ring_scanner_allow_camera
+                        },
                     ),
-                    onPrimary = { if (hasPermission) retry() else permissionRequest.launch(Manifest.permission.CAMERA) },
+                    onPrimary = {
+                        when {
+                            hasPermission -> retry()
+                            // The screen looks at the permission again when it resumes.
+                            askingBlocked -> SystemSettings.openAppDetails(context)
+                            else -> permissionRequest.launch(Manifest.permission.CAMERA)
+                        }
+                    },
                     onUnlock = activity?.takeIf { context.isKeyguardLocked() }?.let { locked -> { locked.requestUnlock(retry) } },
                     onOpenTypedFallback = onOpenTypedFallback,
                     modifier = Modifier.weight(1f),
