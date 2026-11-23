@@ -53,8 +53,8 @@ class AlarmEditorViewModelTest {
 
     private fun at(local: String): Instant = LocalDateTime.parse(local).atZone(zone).toInstant()
 
-    private fun TestScope.editor(alarmId: Long = Alarm.NEW_ID): AlarmEditorViewModel =
-        AlarmEditorViewModel(alarmId, alarms, barcodes, settings, sessions, clock).also {
+    private fun TestScope.editor(alarmId: Long = Alarm.NEW_ID, copyFromId: Long = Alarm.NEW_ID): AlarmEditorViewModel =
+        AlarmEditorViewModel(alarmId, alarms, barcodes, settings, sessions, clock, copyFromId).also {
             keepCollecting(it.state)
             advanceUntilIdle()
         }
@@ -337,5 +337,92 @@ class AlarmEditorViewModelTest {
         test.onScanned(ScannedCode(BarcodeFormat.EAN_13, cereal.value))
         advanceUntilIdle()
         assertEquals(cereal, (test.state.value.stage as ScanStage.Tested).match)
+    }
+
+    @Test
+    fun `a duplicate starts as a new alarm with the source's settings and copies of its barcodes`() = runTest {
+        val source = Alarm(
+            time = LocalTime.of(5, 45),
+            label = "Gym",
+            repeatDays = setOf(DayOfWeek.MONDAY, DayOfWeek.THURSDAY),
+            enabled = false,
+            vibrate = false,
+            ringtoneUri = "content://media/alarm/7",
+            minRingVolumePercent = 40,
+            volumeRampSeconds = 90,
+        )
+        val sourceId = alarms.upsertWithBarcodes(source, listOf(toothpaste, cereal))
+        val storedBarcodes = barcodes.all(sourceId)
+
+        val editor = editor(copyFromId = sourceId)
+
+        val copy = editor.state.value
+        assertFalse(copy.loading)
+        assertTrue(copy.isNew)
+        assertEquals(LocalTime.of(5, 45), copy.time)
+        assertEquals("Gym", copy.label)
+        assertEquals(setOf(DayOfWeek.MONDAY, DayOfWeek.THURSDAY), copy.repeatDays)
+        assertFalse(copy.vibrate)
+        assertEquals("content://media/alarm/7", copy.ringtoneUri)
+        assertEquals(40, copy.minRingVolumePercent)
+        assertEquals(90, copy.volumeRampSeconds)
+        assertFalse("a new alarm is switched on when saved", copy.staysOff)
+        assertEquals("the barcodes wait unsaved", listOf(toothpaste, cereal), copy.barcodes)
+        assertEquals(listOf(toothpaste, cereal), editor.currentBarcodes())
+
+        assertEquals("nothing is written before save", listOf(source.copy(id = sourceId)), alarms.all())
+        assertEquals(mapOf(sourceId to storedBarcodes), barcodes.barcodesByAlarm.first())
+    }
+
+    @Test
+    fun `saving a duplicate stores a second alarm with its own barcodes and leaves the source alone`() = runTest {
+        val source = Alarm(time = LocalTime.of(5, 45), label = "Gym", enabled = false, minRingVolumePercent = 40)
+        val sourceId = alarms.upsertWithBarcodes(source, listOf(toothpaste, cereal))
+        val sourceBarcodes = barcodes.all(sourceId)
+        val editor = editor(copyFromId = sourceId)
+
+        editor.setLabel("Gym again")
+        editor.removeBarcode(cereal)
+        editor.save()
+        advanceUntilIdle()
+
+        assertTrue(editor.state.value.finished)
+        val copy = alarms.all().single { it.id != sourceId }
+        assertEquals(
+            source.copy(id = copy.id, label = "Gym again", enabled = true),
+            copy,
+        )
+        val copied = barcodes.all(copy.id)
+        assertEquals(listOf(toothpaste.key), copied.map { it.key })
+        assertTrue("the copies are new rows", copied.none { row -> sourceBarcodes.any { it.id == row.id } })
+        assertEquals(source.copy(id = sourceId), alarms.get(sourceId))
+        assertEquals(sourceBarcodes, barcodes.all(sourceId))
+    }
+
+    @Test
+    fun `a duplicate of an alarm without barcodes or of a missing alarm starts empty`() = runTest {
+        val bare = alarms.upsert(Alarm(time = LocalTime.of(6, 0), label = "Bare"))
+        val copy = editor(copyFromId = bare).state.value
+        assertTrue(copy.isNew)
+        assertEquals("Bare", copy.label)
+        assertTrue(copy.barcodes.isEmpty())
+
+        val missing = editor(copyFromId = 42).state.value
+        assertTrue(missing.isNew)
+        assertFalse(missing.loading)
+        assertEquals(AlarmEditorViewModel.DEFAULT_TIME, missing.time)
+        assertEquals("", missing.label)
+    }
+
+    @Test
+    fun `a stored alarm is edited, not copied, when a copy source is given too`() = runTest {
+        val id = alarms.upsert(Alarm(time = LocalTime.of(8, 15), label = "Mine"))
+        val other = alarms.upsertWithBarcodes(Alarm(time = LocalTime.of(9, 0), label = "Other"), listOf(toothpaste))
+
+        val editor = editor(alarmId = id, copyFromId = other)
+
+        assertFalse(editor.state.value.isNew)
+        assertEquals("Mine", editor.state.value.label)
+        assertTrue(editor.state.value.barcodes.isEmpty())
     }
 }

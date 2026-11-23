@@ -11,6 +11,7 @@
     <string name="ui_action_save">Save</string>
     <string name="ui_action_open_settings">Open settings</string>
     <string name="ui_action_rename">Rename</string>
+    <string name="ui_action_duplicate">Duplicate</string>
     <string name="ui_action_done">Done</string>
     <string name="ui_action_retry">Try again</string>
 

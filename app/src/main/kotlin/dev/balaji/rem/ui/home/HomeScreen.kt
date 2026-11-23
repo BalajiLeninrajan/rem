@@ -74,6 +74,7 @@ private val RefreshPeriod = 15.seconds
 fun HomeScreen(
     onAddAlarm: () -> Unit,
     onEditAlarm: (alarmId: Long) -> Unit,
+    onDuplicateAlarm: (alarmId: Long) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenReliability: () -> Unit,
     onOpenOnboarding: () -> Unit,
@@ -122,6 +123,7 @@ fun HomeScreen(
         snackbarHostState = snackbarHostState,
         onAddAlarm = onAddAlarm,
         onEditAlarm = onEditAlarm,
+        onDuplicateAlarm = onDuplicateAlarm,
         onEnabledChange = viewModel::setEnabled,
         onDeleteAlarm = viewModel::delete,
         onGoToSleep = viewModel::goToSleep,
@@ -139,6 +141,7 @@ fun HomeContent(
     snackbarHostState: SnackbarHostState,
     onAddAlarm: () -> Unit,
     onEditAlarm: (alarmId: Long) -> Unit,
+    onDuplicateAlarm: (alarmId: Long) -> Unit,
     onEnabledChange: (alarmId: Long, enabled: Boolean) -> Unit,
     onDeleteAlarm: (alarmId: Long) -> Unit,
     onGoToSleep: () -> Unit,
@@ -188,11 +191,11 @@ fun HomeContent(
                     ) {
                         header()
                     }
-                    AlarmList(state, null, onEditAlarm, onEnabledChange, onDeleteAlarm, Modifier.weight(1f))
+                    AlarmList(state, null, onEditAlarm, onDuplicateAlarm, onEnabledChange, onDeleteAlarm, Modifier.weight(1f))
                 }
             } else {
                 CenteredContent {
-                    AlarmList(state, header, onEditAlarm, onEnabledChange, onDeleteAlarm)
+                    AlarmList(state, header, onEditAlarm, onDuplicateAlarm, onEnabledChange, onDeleteAlarm)
                 }
             }
         }
@@ -240,6 +243,7 @@ private fun AlarmList(
     state: HomeUiState,
     header: (@Composable () -> Unit)?,
     onEditAlarm: (alarmId: Long) -> Unit,
+    onDuplicateAlarm: (alarmId: Long) -> Unit,
     onEnabledChange: (alarmId: Long, enabled: Boolean) -> Unit,
     onDeleteAlarm: (alarmId: Long) -> Unit,
     modifier: Modifier = Modifier,
@@ -263,6 +267,7 @@ private fun AlarmList(
                 zone = state.zone,
                 onClick = { onEditAlarm(row.alarm.id) },
                 onEnabledChange = { enabled -> onEnabledChange(row.alarm.id, enabled) },
+                onDuplicate = { onDuplicateAlarm(row.alarm.id) },
                 onDelete = { onDeleteAlarm(row.alarm.id) },
             )
         }
@@ -324,6 +329,7 @@ private fun HomePreviewContent(state: HomeUiState) {
             snackbarHostState = remember { SnackbarHostState() },
             onAddAlarm = {},
             onEditAlarm = {},
+            onDuplicateAlarm = {},
             onEnabledChange = { _, _ -> },
             onDeleteAlarm = {},
             onGoToSleep = {},

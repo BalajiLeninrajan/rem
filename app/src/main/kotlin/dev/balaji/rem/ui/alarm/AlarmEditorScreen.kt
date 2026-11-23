@@ -13,6 +13,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.AlertDialog
@@ -83,6 +84,7 @@ private val RefreshPeriod = 15.seconds
 @Composable
 fun alarmEditorViewModel(
     alarmId: Long,
+    copyFromId: Long = Alarm.NEW_ID,
     owner: ViewModelStoreOwner = checkNotNull(LocalViewModelStoreOwner.current) { "No ViewModelStoreOwner" },
 ): AlarmEditorViewModel = containerViewModel(owner) {
     AlarmEditorViewModel(
@@ -92,22 +94,26 @@ fun alarmEditorViewModel(
         it.settingsRepository,
         it.sleepSessionRepository,
         it.clock,
+        copyFromId,
     )
 }
 
 /**
- * Creates an alarm when [alarmId] is `Alarm.NEW_ID`, edits the stored one otherwise.
- * [onScanBarcode] opens the scanner for this alarm, to add a barcode or with `testOnly` to
- * test one. [onDone] closes the screen.
+ * Creates an alarm when [alarmId] is `Alarm.NEW_ID`, edits the stored one otherwise. A new
+ * alarm with a [copyFromId] starts as a copy of that alarm. [onScanBarcode] opens the scanner
+ * for this alarm, to add a barcode or with `testOnly` to test one. [onDuplicate] opens a new
+ * alarm copied from this stored one. [onDone] closes the screen.
  */
 @Composable
 fun AlarmEditorScreen(
     alarmId: Long,
+    copyFromId: Long,
     onScanBarcode: (testOnly: Boolean) -> Unit,
+    onDuplicate: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel = alarmEditorViewModel(alarmId)
+    val viewModel = alarmEditorViewModel(alarmId, copyFromId)
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     WhileResumed(RefreshPeriod) { viewModel.refresh() }
@@ -120,6 +126,7 @@ fun AlarmEditorScreen(
         onBack = onDone,
         onSave = viewModel::save,
         onDelete = viewModel::delete,
+        onDuplicate = onDuplicate,
         onTimeChange = viewModel::setTime,
         onLabelChange = viewModel::setLabel,
         onToggleDay = viewModel::toggleDay,
@@ -140,6 +147,7 @@ fun AlarmEditorContent(
     onBack: () -> Unit,
     onSave: () -> Unit,
     onDelete: () -> Unit,
+    onDuplicate: () -> Unit,
     onTimeChange: (LocalTime) -> Unit,
     onLabelChange: (String) -> Unit,
     onToggleDay: (DayOfWeek) -> Unit,
@@ -165,6 +173,9 @@ fun AlarmEditorContent(
         snackbarHostState = snackbarHostState,
         actions = {
             if (!state.isNew) {
+                IconButton(onClick = onDuplicate) {
+                    Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.ui_action_duplicate))
+                }
                 IconButton(onClick = { confirmDelete = true }) {
                     Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.ui_action_delete))
                 }
@@ -389,6 +400,7 @@ private fun AlarmEditorPreview() {
             onBack = {},
             onSave = {},
             onDelete = {},
+            onDuplicate = {},
             onTimeChange = {},
             onLabelChange = {},
             onToggleDay = {},

@@ -70,6 +70,10 @@ data class AlarmEditorUiState(
 /**
  * Edits one alarm, or creates one when there is no stored alarm with [alarmId].
  *
+ * A new alarm with a [copyFromId] is a duplicate. It starts with that alarm's time, label,
+ * days and sound, and with copies of its barcodes as unsaved barcodes. Nothing is stored
+ * until [save]. A [copyFromId] that names no stored alarm gives the defaults.
+ *
  * It is also the [BarcodeTarget] of the scan screen opened from the editor. A barcode added
  * to or deleted from a stored alarm is written at once. A new alarm keeps its barcodes in
  * the editor, and [save] stores them together with the alarm in one transaction.
@@ -81,6 +85,7 @@ class AlarmEditorViewModel(
     settings: SettingsRepository,
     sessions: SleepSessionRepository,
     private val clock: Clock,
+    private val copyFromId: Long = Alarm.NEW_ID,
 ) : ViewModel(), BarcodeTarget {
     private val draft = MutableStateFlow(AlarmEditorUiState())
     private val now = MutableStateFlow(clock.instant())
@@ -119,22 +124,28 @@ class AlarmEditorViewModel(
     init {
         viewModelScope.launch {
             val alarm = if (alarmId == Alarm.NEW_ID) null else alarms.get(alarmId)
+            val source = if (alarm != null || copyFromId == Alarm.NEW_ID) null else alarms.get(copyFromId)
+            if (source != null) {
+                pending.value = barcodes.all(source.id).map { it.copy(id = Barcode.NEW_ID) }
+            }
             stored = alarm
             storedAlarmId.value = alarm?.id
             draft.update {
-                if (alarm == null) {
+                // A duplicate starts from its source, but it is still a new alarm.
+                val from = alarm ?: source
+                if (from == null) {
                     it.copy(loading = false, isNew = true)
                 } else {
                     it.copy(
                         loading = false,
-                        isNew = false,
-                        time = alarm.time,
-                        label = alarm.label,
-                        repeatDays = alarm.repeatDays,
-                        vibrate = alarm.vibrate,
-                        ringtoneUri = alarm.ringtoneUri,
-                        minRingVolumePercent = alarm.minRingVolumePercent,
-                        volumeRampSeconds = alarm.volumeRampSeconds,
+                        isNew = alarm == null,
+                        time = from.time,
+                        label = from.label,
+                        repeatDays = from.repeatDays,
+                        vibrate = from.vibrate,
+                        ringtoneUri = from.ringtoneUri,
+                        minRingVolumePercent = from.minRingVolumePercent,
+                        volumeRampSeconds = from.volumeRampSeconds,
                     )
                 }
             }

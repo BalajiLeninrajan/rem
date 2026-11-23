@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Warning
@@ -51,7 +52,7 @@ import java.time.ZoneOffset
 
 /**
  * One alarm: the deadline large, label and repeat days, the computed ring time, a warning
- * when it is on without a barcode, the switch and a delete menu.
+ * when it is on without a barcode, the switch and a menu to duplicate or delete it.
  */
 @Composable
 fun AlarmCard(
@@ -60,6 +61,7 @@ fun AlarmCard(
     zone: ZoneId,
     onClick: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
+    onDuplicate: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -108,7 +110,7 @@ fun AlarmCard(
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
-                AlarmMenu(onDelete = onDelete)
+                AlarmMenu(onDuplicate = onDuplicate, onDelete = onDelete)
                 val switchLabel = stringResource(R.string.ui_home_alarm_switch, clockText(alarm.time))
                 Switch(
                     checked = alarm.enabled,
@@ -121,13 +123,21 @@ fun AlarmCard(
 }
 
 @Composable
-private fun AlarmMenu(onDelete: () -> Unit) {
+private fun AlarmMenu(onDuplicate: () -> Unit, onDelete: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
             Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(R.string.ui_action_more))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.ui_action_duplicate)) },
+                leadingIcon = { Icon(imageVector = Icons.Filled.ContentCopy, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onDuplicate()
+                },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.ui_action_delete)) },
                 leadingIcon = { Icon(imageVector = Icons.Filled.Delete, contentDescription = null) },
@@ -176,6 +186,7 @@ private fun AlarmCardPreview() {
             zone = ZoneOffset.UTC,
             onClick = {},
             onEnabledChange = {},
+            onDuplicate = {},
             onDelete = {},
         )
     }

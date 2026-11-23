@@ -40,24 +40,35 @@ fun RemNavHost(
             HomeScreen(
                 onAddAlarm = { navController.open(AlarmEditorRoute(Alarm.NEW_ID)) },
                 onEditAlarm = { alarmId -> navController.open(AlarmEditorRoute(alarmId)) },
+                onDuplicateAlarm = { alarmId -> navController.open(AlarmEditorRoute(copyFromId = alarmId)) },
                 onOpenSettings = { navController.open(SettingsRoute) },
                 onOpenReliability = { navController.open(ReliabilityRoute) },
                 onOpenOnboarding = { navController.open(OnboardingRoute) },
             )
         }
         composable<AlarmEditorRoute> { entry ->
+            val route = entry.toRoute<AlarmEditorRoute>()
             AlarmEditorScreen(
-                alarmId = entry.toRoute<AlarmEditorRoute>().alarmId,
+                alarmId = route.alarmId,
+                copyFromId = route.copyFromId,
                 onScanBarcode = { testOnly -> navController.open(BarcodeScanRoute(testOnly)) },
+                // The copy opens on top, so this editor and its unsaved changes are there again after it.
+                // Not open(): single top would hand this editor's entry, and its view model, to the copy.
+                onDuplicate = {
+                    if (navController.currentBackStackEntry?.id == entry.id) {
+                        navController.navigate(AlarmEditorRoute(copyFromId = route.alarmId))
+                    }
+                },
                 onDone = navController::back,
             )
         }
         composable<BarcodeScanRoute> { entry ->
             // The scanner is only opened from the editor, so the editor is right below it.
             val editorEntry = remember(entry) { navController.getBackStackEntry<AlarmEditorRoute>() }
+            val editorRoute = editorEntry.toRoute<AlarmEditorRoute>()
             BarcodeScanScreen(
                 testOnly = entry.toRoute<BarcodeScanRoute>().testOnly,
-                target = alarmEditorViewModel(editorEntry.toRoute<AlarmEditorRoute>().alarmId, owner = editorEntry),
+                target = alarmEditorViewModel(editorRoute.alarmId, editorRoute.copyFromId, owner = editorEntry),
                 onDone = navController::back,
             )
         }
