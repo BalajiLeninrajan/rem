@@ -13,8 +13,16 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Sends scans to the controller and remembers the last rejected one for a few seconds. */
+/**
+ * Sends scans to the controller and remembers the last rejected one for a few seconds.
+ * Starts a quiet period when created, which is once per visit to the scanner: a rotation
+ * keeps the view model, so it cannot stretch the quiet time.
+ */
 internal class RingScannerViewModel(private val controller: RingController) : ViewModel() {
+    init {
+        controller.startQuietPeriod()
+    }
+
     /** The barcode that was just scanned and is not registered, or null. */
     var rejected: ScannedBarcode? by mutableStateOf(null)
         private set
@@ -40,10 +48,15 @@ internal class RingScannerViewModel(private val controller: RingController) : Vi
 
 /**
  * Holds one fallback code for as long as the typed fallback screen is open. A rotation
- * keeps the code. Leaving the screen and coming back gives a new one.
+ * keeps the code. Leaving the screen and coming back gives a new one, and a new quiet
+ * period, as the scanner does.
  */
 internal class TypedFallbackViewModel(private val controller: RingController) : ViewModel() {
     val code: String = controller.newFallbackCode()
+
+    init {
+        controller.startQuietPeriod()
+    }
 
     var typed: String by mutableStateOf("")
         private set

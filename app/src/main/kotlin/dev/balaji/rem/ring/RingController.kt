@@ -13,6 +13,8 @@ sealed interface RingingState {
      * @property requiresBarcode false when the alarm has no barcode, and for the test alarm.
      *   Then, and only then, [RingController.dismissWithoutBarcode] works and the screen
      *   shows a plain button.
+     * @property quietUntil when the quiet period started by [RingController.startQuietPeriod]
+     *   ends, or null while the alarm is loud.
      */
     data class Ringing(
         val alarmId: Long,
@@ -20,6 +22,7 @@ sealed interface RingingState {
         val startedAt: Instant,
         val deadline: Instant,
         val requiresBarcode: Boolean,
+        val quietUntil: Instant? = null,
     ) : RingingState
 }
 
@@ -93,6 +96,20 @@ interface RingController {
      * typed fallback screen calls this each time it opens.
      */
     fun newFallbackCode(): String
+
+    /**
+     * Turns the tone and the vibration off for [dev.balaji.rem.core.RingLimits.QUIET_PERIOD],
+     * so the user can scan or type the code in peace. The scanner and typed fallback screens
+     * call this each time they open, and each call starts a fresh period. The alarm rings
+     * again when the period runs out without a dismissal, or at once on [endQuietPeriod].
+     * The volume floor stays in force and the quiet time counts toward the 30 minute limit.
+     * A ring picked up again after a process death starts loud. Does nothing when nothing
+     * rings. Must not suspend: called from the main thread.
+     */
+    fun startQuietPeriod()
+
+    /** Makes the alarm loud again at once. The ringing screen calls this whenever it shows. */
+    fun endQuietPeriod()
 
     /**
      * Called once on every process start, before the first reschedule. If a ringing record

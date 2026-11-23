@@ -21,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -43,7 +44,11 @@ import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** The time, the alarm label, the "scan to dismiss" button that opens the scanner, and the "can't scan?" link. */
+/**
+ * The time, the alarm label, the "scan to dismiss" button that opens the scanner, and the
+ * "can't scan?" link. The alarm is loud whenever this screen shows: coming back here ends
+ * the quiet period that the scanner or the typed fallback started.
+ */
 @Composable
 fun RingingScreen(
     onOpenScanner: () -> Unit,
@@ -58,6 +63,9 @@ fun RingingScreen(
 
     // Back does nothing while an alarm rings.
     BackHandler {}
+
+    // Runs when this screen enters composition: on the first show and on every return from the scanner or the typed code.
+    LaunchedEffect(controller) { controller.endQuietPeriod() }
 
     val header: @Composable (Modifier) -> Unit = { headerModifier ->
         RingHeader(time = currentTime(container.clock), label = ringing?.label.orEmpty(), modifier = headerModifier)

@@ -48,6 +48,10 @@ import kotlinx.coroutines.withTimeout
  * fired record is removed and a one-shot alarm stays on, so the next reschedule plans the
  * deadline again.
  *
+ * While the user scans or types the code, the ring can be quiet for a while
+ * ([RingLimits.QUIET_PERIOD]). That lives only in memory: a ring picked up again after a
+ * process death starts loud, and the 30 minute limit and the watchdog do not change.
+ *
  * @param watchdog an alarm clock entry kept a minute ahead while a ring is live. It
  *   brings the ring back when the process dies, and after a reboot.
  * @param reschedule runs `AlarmScheduler.rescheduleAll`. A lambda so the scheduler is not
@@ -91,6 +95,20 @@ internal class DefaultRingController(
 
         @Volatile
         var timeout: Job? = null
+
+        /** What the service plays. Null until the alarm is loaded. */
+        @Volatile
+        var spec: RingSpec? = null
+
+        /** When the quiet period ends, or null while the ring is loud. */
+        @Volatile
+        var quietUntil: Instant? = null
+
+        /** Counts quiet periods, so the timer of an earlier one cannot end a later one. Only touched under the lock. */
+        var quietPeriod: Int = 0
+
+        @Volatile
+        var quietTimer: Job? = null
 
         val isTest: Boolean get() = ring.alarmId == AlarmBroadcast.TEST_ALARM_ID
 
@@ -188,6 +206,38 @@ internal class DefaultRingController(
         return code
     }
 
+    override fun startQuietPeriod() {
+        synchronized(lock) {
+            val mine = live ?: return
+            val period = ++mine.quietPeriod
+            mine.quietUntil = clock.instant().plus(RingLimits.QUIET_PERIOD).truncatedTo(ChronoUnit.MILLIS)
+            mine.quietTimer?.cancel()
+            mine.quietTimer = scope.launch {
+                delay(RingLimits.QUIET_PERIOD.toMillis())
+                synchronized(lock) {
+                    if (live === mine && mine.quietPeriod == period) endQuiet(mine)
+                }
+            }
+            publishState(mine)
+        }
+    }
+
+    override fun endQuietPeriod() {
+        synchronized(lock) {
+            val mine = live ?: return
+            mine.quietTimer?.cancel()
+            endQuiet(mine)
+        }
+    }
+
+    /** Call with [lock] held and [mine] live. */
+    private fun endQuiet(mine: Live) {
+        if (mine.quietUntil == null) return
+        mine.quietPeriod++
+        mine.quietUntil = null
+        publishState(mine)
+    }
+
     override suspend fun recoverInterruptedRing() {
         attempt {
             val record = ringState.currentRinging() ?: return@attempt
@@ -232,7 +282,7 @@ internal class DefaultRingController(
             claimed.label = labelOf(ring.alarmId, alarm = null)
             live = claimed
             // Ringing from this moment, so the screens never see Idle between the broadcast and the loaded alarm.
-            ringingState.value = claimed.toState(requiresBarcode = true)
+            ringingState.value = claimed.toState()
             serviceCommand.value = RingCommand.Wait
             return claimed
         }
@@ -318,10 +368,20 @@ internal class DefaultRingController(
     private fun publish(mine: Live, spec: RingSpec): Boolean {
         synchronized(lock) {
             if (live !== mine) return false
-            ringingState.value = mine.toState(requiresBarcode = mine.requiresBarcode)
-            serviceCommand.value = RingCommand.Play(spec)
+            mine.spec = spec
+            publishState(mine)
             return true
         }
+    }
+
+    /**
+     * Shows [mine] on the screens and, once its alarm is loaded, tells the service what to
+     * play. A quiet period that starts before then is applied by [publish]. Call with
+     * [lock] held and [mine] live.
+     */
+    private fun publishState(mine: Live) {
+        ringingState.value = mine.toState()
+        mine.spec?.let { serviceCommand.value = RingCommand.Play(it, quiet = mine.quietUntil != null) }
     }
 
     /**
@@ -352,6 +412,7 @@ internal class DefaultRingController(
 
     private suspend fun cleanUp(mine: Live, ending: Ending) {
         mine.timeout?.cancel()
+        mine.quietTimer?.cancel()
         // Joined, so a re-arm that is under way cannot land after the cancel below.
         mine.rearm?.cancelAndJoin()
         if (live == null) attempt { watchdog.cancel() }
@@ -433,12 +494,14 @@ internal class DefaultRingController(
     private fun labelOf(alarmId: Long, alarm: Alarm?): String =
         if (alarmId == AlarmBroadcast.TEST_ALARM_ID) testAlarmLabel else alarm?.label.orEmpty()
 
-    private fun Live.toState(requiresBarcode: Boolean) = RingingState.Ringing(
+    /** Until the alarm is loaded the ring counts as needing a barcode, so no plain stop button shows too early. */
+    private fun Live.toState() = RingingState.Ringing(
         alarmId = ring.alarmId,
         label = label,
         startedAt = startedAt,
         deadline = ring.deadline,
-        requiresBarcode = requiresBarcode,
+        requiresBarcode = spec == null || requiresBarcode,
+        quietUntil = quietUntil,
     )
 
     private suspend fun <T> loadOr(default: T, block: suspend () -> T): T =

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -50,7 +51,7 @@ import dev.balaji.rem.di.containerViewModel
 import dev.balaji.rem.scan.BarcodeScanner
 import dev.balaji.rem.ui.system.SystemSettings
 
-/** Scans a barcode to dismiss the ring. */
+/** Scans a barcode to dismiss the ring. The alarm is quiet for a while after this screen opens. */
 @Composable
 fun RingScannerScreen(
     onOpenTypedFallback: () -> Unit,
@@ -103,14 +104,16 @@ fun RingScannerScreen(
         }
         Column(
             modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            QuietNotice()
             if (scanning) {
                 ScannerMessage(
                     text = viewModel.rejected?.let { stringResource(R.string.ring_scanner_rejected, it.rawValue.take(24)) }
                         ?: stringResource(R.string.ring_scanner_instruction),
                     isError = viewModel.rejected != null,
                 )
+                Spacer(Modifier.weight(1f))
             } else {
                 ScannerProblem(
                     message = stringResource(

@@ -33,6 +33,7 @@ internal val ALARM_AUDIO_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
  * Loops one tone on the alarm stream until [release]. It plays the user's ringtone when
  * that opens in time and the bundled tone otherwise. If the player dies mid-ring it is
  * rebuilt on the bundled tone, again and again, because silence is the one wrong outcome.
+ * The one silence it allows is a pause asked for with [setPaused].
  *
  * Call every method on the main thread. [scope] runs on the main thread too.
  */
@@ -45,6 +46,8 @@ internal class AlarmAudioPlayer(private val context: Context, private val scope:
     private var rampMillis = 0L
     private var startedAtMillis = 0L
     private var recovery: Job? = null
+    private var started = false
+    private var paused = false
 
     /** Called on the main thread whenever the system reports a new output route. */
     var onRoutingChanged: () -> Unit = {}
@@ -64,6 +67,7 @@ internal class AlarmAudioPlayer(private val context: Context, private val scope:
     fun start(rampSeconds: Int) {
         rampMillis = rampSeconds * 1000L
         startedAtMillis = SystemClock.elapsedRealtime()
+        started = true
         startCurrent()
         scope.launch {
             while (applyGain() < 1f) delay(RAMP_STEP_MILLIS)
@@ -78,6 +82,28 @@ internal class AlarmAudioPlayer(private val context: Context, private val scope:
             current.setPreferredDevice(device)
         } catch (e: IllegalStateException) {
             false
+        }
+    }
+
+    /**
+     * Pauses the tone, or plays it again. Works before [start] too: a player that starts
+     * paused stays silent until this is called with false. The volume ramp keeps counting
+     * while paused, and a rebuilt player stays paused.
+     */
+    fun setPaused(paused: Boolean) {
+        if (this.paused == paused) return
+        this.paused = paused
+        val current = player ?: return
+        try {
+            if (paused) {
+                if (current.isPlaying) current.pause()
+            } else if (started && !current.isPlaying) {
+                applyGain()
+                current.start()
+            }
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "MediaPlayer did not ${if (paused) "pause" else "resume"}", e)
+            recover()
         }
     }
 
@@ -102,7 +128,7 @@ internal class AlarmAudioPlayer(private val context: Context, private val scope:
             current.addOnRoutingChangedListener(routingListener, mainHandler)
             preferredDevice?.let(current::setPreferredDevice)
             applyGain()
-            current.start()
+            if (!paused) current.start()
         } catch (e: IllegalStateException) {
             Log.w(TAG, "MediaPlayer did not start", e)
             recover()

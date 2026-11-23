@@ -31,7 +31,11 @@ internal sealed interface RingCommand {
     /** A ring has started and its alarm is still being loaded. Stay in the foreground. */
     data object Wait : RingCommand
 
-    data class Play(val spec: RingSpec) : RingCommand
+    /**
+     * Play [spec]. While [quiet] the tone is paused and the vibration is off, but the
+     * volume floor still holds. A change of [quiet] alone must not restart the ring.
+     */
+    data class Play(val spec: RingSpec, val quiet: Boolean) : RingCommand
 }
 
 /** The side of the ring controller that only [RingingService] talks to. */

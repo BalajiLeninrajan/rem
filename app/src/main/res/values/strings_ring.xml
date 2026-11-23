@@ -41,4 +41,7 @@
     <string name="ring_typed_progress">%1$d of %2$d correct</string>
     <string name="ring_typed_wrong">Character %1$d is wrong. Delete it and try again.</string>
     <string name="ring_typed_back">Back</string>
+
+    <string name="ring_quiet_remaining">Quiet for %1$s. Then the alarm rings again.</string>
+    <string name="ring_quiet_over">Ringing again. Go back and open this screen again for another quiet period.</string>
 </resources>

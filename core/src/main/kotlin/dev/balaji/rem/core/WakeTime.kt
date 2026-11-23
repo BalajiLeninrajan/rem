@@ -31,9 +31,16 @@ enum class DeadlineReason {
 
 data class WakeTime(val ringAt: Instant, val explanation: WakeExplanation)
 
-/** Safety limit on one ring. After this the ring stops and counts as missed. */
+/** Time limits of one ring. */
 object RingLimits {
+    /** Safety limit on one ring. After this the ring stops and counts as missed. */
     val MAX_RING: Duration = Duration.ofMinutes(30)
+
+    /**
+     * How long the tone and vibration stay off once the user opens the scanner or the
+     * typed code. The time counts toward [MAX_RING].
+     */
+    val QUIET_PERIOD: Duration = Duration.ofSeconds(60)
 }
 
 /**

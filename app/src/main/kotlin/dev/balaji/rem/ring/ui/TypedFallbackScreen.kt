@@ -36,7 +36,10 @@ import dev.balaji.rem.R
 import dev.balaji.rem.core.FallbackCode
 import dev.balaji.rem.di.containerViewModel
 
-/** Shows a fresh 40 character code and dismisses the ring when it is typed back. Paste is disabled. */
+/**
+ * Shows a fresh 40 character code and dismisses the ring when it is typed back. Paste is
+ * disabled. The alarm is quiet for a while after this screen opens.
+ */
 @Composable
 fun TypedFallbackScreen(
     onBack: () -> Unit,
@@ -57,6 +60,7 @@ fun TypedFallbackScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            QuietNotice()
             Text(text = stringResource(R.string.ring_typed_instruction), style = MaterialTheme.typography.titleMedium)
             Text(
                 text = codeWithProgress(

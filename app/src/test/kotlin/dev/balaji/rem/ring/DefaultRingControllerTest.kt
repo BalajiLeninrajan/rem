@@ -112,6 +112,12 @@ class DefaultRingControllerTest {
             runCurrent()
         }
 
+    private val DefaultRingController.isQuiet: Boolean get() = (command.value as RingCommand.Play).quiet
+
+    private val DefaultRingController.quietUntil: Instant? get() = (state.value as RingingState.Ringing).quietUntil
+
+    private val quietMillis = RingLimits.QUIET_PERIOD.toMillis()
+
     @Test
     fun `counts as ringing the moment startRinging returns`() = runTest {
         val id = oneShot()
@@ -702,5 +708,181 @@ class DefaultRingControllerTest {
         runCurrent()
 
         assertEquals(RingingState.Idle, controller.state.value)
+    }
+
+    @Test
+    fun `opening the scanner quiets the same ring for the quiet period`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        val controller = ringing(id)
+        val loud = controller.command.value as RingCommand.Play
+        assertFalse(loud.quiet)
+        assertNull(controller.quietUntil)
+
+        controller.startQuietPeriod()
+
+        assertEquals(loud.copy(quiet = true), controller.command.value)
+        assertEquals(now.plus(RingLimits.QUIET_PERIOD), controller.quietUntil)
+        assertEquals(true, (controller.state.value as RingingState.Ringing).requiresBarcode)
+        assertEquals(RingingRecord(id, now, now, deadline), ringState.currentRinging())
+        assertEquals(ringFor(id), watchdogEntry?.first)
+    }
+
+    @Test
+    fun `the ring is loud again when the quiet period runs out`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        val controller = ringing(id)
+        controller.startQuietPeriod()
+
+        advanceTimeBy(quietMillis - 1)
+        runCurrent()
+        assertTrue(controller.isQuiet)
+
+        advanceTimeBy(2)
+        runCurrent()
+        assertFalse(controller.isQuiet)
+        assertNull(controller.quietUntil)
+        assertTrue(controller.state.value is RingingState.Ringing)
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithBarcode(toothpaste))
+    }
+
+    @Test
+    fun `going back to the ringing screen makes the ring loud at once`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        val controller = ringing(id)
+        controller.startQuietPeriod()
+        advanceTimeBy(10_000)
+
+        controller.endQuietPeriod()
+
+        assertFalse(controller.isQuiet)
+        assertNull(controller.quietUntil)
+        advanceTimeBy(quietMillis)
+        runCurrent()
+        assertFalse(controller.isQuiet)
+        controller.endQuietPeriod()
+        assertFalse("ending a period that is over changes nothing", controller.isQuiet)
+    }
+
+    @Test
+    fun `opening the scanner again starts a fresh quiet period`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        val controller = ringing(id)
+        controller.startQuietPeriod()
+        advanceTimeBy(40_000)
+        clock.now = now.plusSeconds(40)
+
+        controller.startQuietPeriod()
+
+        assertEquals(now.plusSeconds(40).plus(RingLimits.QUIET_PERIOD), controller.quietUntil)
+        // Past the end of the first period.
+        advanceTimeBy(30_000)
+        runCurrent()
+        assertTrue(controller.isQuiet)
+        advanceTimeBy(quietMillis - 30_000 + 1)
+        runCurrent()
+        assertFalse(controller.isQuiet)
+    }
+
+    @Test
+    fun `a quiet period asked for while the alarm is loading applies once it plays`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        val controller = controller()
+        controller.startRinging(ringFor(id))
+
+        controller.startQuietPeriod()
+
+        assertEquals(RingCommand.Wait, controller.command.value)
+        assertEquals(now.plus(RingLimits.QUIET_PERIOD), controller.quietUntil)
+        runCurrent()
+        assertTrue(controller.isQuiet)
+    }
+
+    @Test
+    fun `a quiet ring can be dismissed and stays stopped when the period would have ended`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        val controller = ringing(id)
+        controller.startQuietPeriod()
+
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithBarcode(toothpaste))
+
+        assertEquals(RingingState.Idle, controller.state.value)
+        assertEquals(RingCommand.Stop, controller.command.value)
+        advanceTimeBy(quietMillis + 1)
+        runCurrent()
+        assertEquals(RingingState.Idle, controller.state.value)
+        assertEquals(RingCommand.Stop, controller.command.value)
+        assertNull(ringState.currentRinging())
+        assertEquals(false, alarms.get(id)?.enabled)
+        assertEquals(1, reschedules)
+    }
+
+    @Test
+    fun `the typed code dismisses a quiet ring`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        val controller = ringing(id)
+        val code = controller.newFallbackCode()
+        controller.startQuietPeriod()
+
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithTypedCode(code))
+        assertEquals(RingCommand.Stop, controller.command.value)
+    }
+
+    @Test
+    fun `the 30 minute limit ends a quiet ring`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        val controller = ringing(id)
+        advanceTimeBy(RingLimits.MAX_RING.toMillis() - 30_000)
+        controller.startQuietPeriod()
+        assertTrue(controller.isQuiet)
+
+        clock.now = now.plus(RingLimits.MAX_RING)
+        advanceTimeBy(30_001)
+        runCurrent()
+
+        assertEquals(RingingState.Idle, controller.state.value)
+        assertEquals(RingCommand.Stop, controller.command.value)
+        assertEquals(listOf(MissedAlarm(id, "Work", deadline, MissedReason.RING_TIMED_OUT)), missed)
+        assertNull(ringState.currentRinging())
+        assertNull(watchdogEntry)
+        advanceTimeBy(quietMillis)
+        runCurrent()
+        assertEquals(RingCommand.Stop, controller.command.value)
+    }
+
+    @Test
+    fun `a ring picked up after a process death starts loud`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        ringing(id).startQuietPeriod()
+        val record = ringState.currentRinging()!!
+
+        // The process died. A new controller picks the ring up through the watchdog.
+        val controller = controller()
+        controller.resumeRinging(ScheduledRing(id, record.ringAt, record.deadline))
+        runCurrent()
+
+        assertFalse(controller.isQuiet)
+        assertNull(controller.quietUntil)
+    }
+
+    @Test
+    fun `quiet periods do nothing when nothing rings`() = runTest {
+        val controller = controller()
+
+        controller.startQuietPeriod()
+        controller.endQuietPeriod()
+        advanceTimeBy(quietMillis + 1)
+        runCurrent()
+
+        assertEquals(RingingState.Idle, controller.state.value)
+        assertEquals(RingCommand.Stop, controller.command.value)
     }
 }

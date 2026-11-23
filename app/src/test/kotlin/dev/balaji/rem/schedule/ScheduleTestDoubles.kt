@@ -69,6 +69,10 @@ class RecordingRingController : RingController {
 
     override fun newFallbackCode() = ""
 
+    override fun startQuietPeriod() = Unit
+
+    override fun endQuietPeriod() = Unit
+
     override suspend fun recoverInterruptedRing() = Unit
 }
 
