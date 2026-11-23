@@ -20,6 +20,10 @@ import kotlinx.coroutines.launch
  * is no ramp, so the preview starts at the level a ring reaches. [stop] puts the user's
  * alarm volume back.
  *
+ * A ring stops the preview before it touches the volume, see [stopActive]. Otherwise the
+ * ring would take the volume the preview raised for the user's own, and put that back when
+ * it ends.
+ *
  * Starts in the constructor. Call every method on the main thread.
  */
 internal class AlarmTonePreviewPlayback(context: Context, tone: PreviewTone) : PreviewPlayback {
@@ -33,7 +37,11 @@ internal class AlarmTonePreviewPlayback(context: Context, tone: PreviewTone) : P
         .setAudioAttributes(ALARM_AUDIO_ATTRIBUTES)
         .build()
 
+    private var stopped = false
+
     init {
+        active?.stop()
+        active = this
         guarded("volume floor") { volumeFloor.enforce() }
         guarded("audio focus") { audioManager.requestAudioFocus(focusRequest) }
         scope.launch {
@@ -44,6 +52,8 @@ internal class AlarmTonePreviewPlayback(context: Context, tone: PreviewTone) : P
     }
 
     override fun setMinRingVolumePercent(percent: Int) {
+        // A ring may have stopped this preview before the editor noticed.
+        if (stopped) return
         guarded("volume floor") {
             volumeFloor.restore()
             volumeFloor = AlarmVolumeFloor(audioManager, percent)
@@ -51,7 +61,11 @@ internal class AlarmTonePreviewPlayback(context: Context, tone: PreviewTone) : P
         }
     }
 
+    /** Safe to call more than once. */
     override fun stop() {
+        if (stopped) return
+        stopped = true
+        if (active === this) active = null
         scope.cancel()
         player.release()
         guarded("volume floor") { volumeFloor.restore() }
@@ -68,7 +82,15 @@ internal class AlarmTonePreviewPlayback(context: Context, tone: PreviewTone) : P
         }
     }
 
-    private companion object {
-        const val TAG = "AlarmTonePreview"
+    internal companion object {
+        private const val TAG = "AlarmTonePreview"
+
+        /** The preview that plays now, if any. Only touched on the main thread. */
+        private var active: AlarmTonePreviewPlayback? = null
+
+        /** Stops the preview that plays now and puts the user's alarm volume back. Call on the main thread. */
+        fun stopActive() {
+            active?.stop()
+        }
     }
 }

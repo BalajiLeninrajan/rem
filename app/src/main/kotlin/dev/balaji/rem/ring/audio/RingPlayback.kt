@@ -55,6 +55,8 @@ internal class RingPlayback(private val context: Context, val spec: RingSpec) {
 
     fun start() {
         started = true
+        // First, so the volume floor below saves the user's own volume and not one an editor preview raised.
+        AlarmTonePreviewPlayback.stopActive()
         // When Do Not Disturb mutes the tone, vibration is tried whatever the alarm says. The system may
         // block an alarm vibration together with the tone, so the reliability warning is the real defence.
         vibrate = spec.vibrate
