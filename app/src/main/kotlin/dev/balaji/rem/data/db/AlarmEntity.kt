@@ -18,6 +18,8 @@ data class AlarmEntity(
     @ColumnInfo(name = "ringtone_uri") val ringtoneUri: String?,
     @ColumnInfo(name = "min_ring_volume_percent") val minRingVolumePercent: Int,
     @ColumnInfo(name = "volume_ramp_seconds") val volumeRampSeconds: Int,
+    @ColumnInfo(name = "snooze_minutes", defaultValue = "${Alarm.DEFAULT_SNOOZE_MINUTES}") val snoozeMinutes: Int,
+    @ColumnInfo(name = "snooze_limit", defaultValue = "${Alarm.DEFAULT_SNOOZE_LIMIT}") val snoozeLimit: Int,
 )
 
 fun AlarmEntity.toAlarm() = Alarm(
@@ -30,6 +32,8 @@ fun AlarmEntity.toAlarm() = Alarm(
     ringtoneUri = ringtoneUri,
     minRingVolumePercent = minRingVolumePercent,
     volumeRampSeconds = volumeRampSeconds,
+    snoozeMinutes = snoozeMinutes,
+    snoozeLimit = snoozeLimit,
 ).coerced()
 
 fun Alarm.toEntity(): AlarmEntity {
@@ -44,5 +48,7 @@ fun Alarm.toEntity(): AlarmEntity {
         ringtoneUri = alarm.ringtoneUri,
         minRingVolumePercent = alarm.minRingVolumePercent,
         volumeRampSeconds = alarm.volumeRampSeconds,
+        snoozeMinutes = alarm.snoozeMinutes,
+        snoozeLimit = alarm.snoozeLimit,
     )
 }
