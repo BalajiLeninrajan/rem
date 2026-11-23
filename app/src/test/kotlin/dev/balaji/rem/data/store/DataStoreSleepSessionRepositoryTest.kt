@@ -27,4 +27,20 @@ class DataStoreSleepSessionRepositoryTest : SleepSessionRepositoryContract() {
         assertEquals(SleepSession(Instant.parse("2026-01-15T04:00:00.123Z")), started)
         assertEquals(started, after.current())
     }
+
+    @Test
+    fun `accepted late options survive a restart`() = runTest {
+        val file = stores.newStoreFile()
+        val before = DataStoreSleepSessionRepository(stores.open(file))
+        before.start(Instant.parse("2026-01-15T04:00:00Z"))
+        val six = Instant.parse("2026-01-15T11:00:00Z")
+        before.acceptLate(3, six)
+        before.acceptLate(Long.MAX_VALUE, six.plusSeconds(1800))
+        stores.close(file)
+
+        val after = DataStoreSleepSessionRepository(stores.open(file))
+
+        assertEquals(mapOf(3L to six, Long.MAX_VALUE to six.plusSeconds(1800)), after.current()?.acceptedLate)
+    }
 }
+

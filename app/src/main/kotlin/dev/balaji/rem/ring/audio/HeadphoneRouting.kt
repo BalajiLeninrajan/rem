@@ -7,7 +7,7 @@ import java.time.Duration
 internal data class OutputDevice(val id: Int, val type: Int)
 
 internal enum class SpeakerReason {
-    /** The alarm does not ask for headphones only. */
+    /** The headphones-only setting is off. */
     NOT_REQUESTED,
 
     /** No headphone-type output was connected when the ring started. */

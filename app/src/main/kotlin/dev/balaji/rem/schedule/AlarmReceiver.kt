@@ -34,7 +34,8 @@ class AlarmReceiver : BroadcastReceiver() {
             // The fired record goes in before the reschedule. Without it an alarm that rang
             // early would be planned again for its deadline. A ring that did not start is
             // only recorded once its deadline has passed, so a lost early ring is planned
-            // again at the deadline.
+            // again at the deadline. A late ring comes after its deadline, so a lost one is
+            // recorded and the ring controller reports it as missed.
             val fired = ringing || ring.deadline <= container.clock.instant()
             if (fired && ring.alarmId != AlarmBroadcast.TEST_ALARM_ID) {
                 try {

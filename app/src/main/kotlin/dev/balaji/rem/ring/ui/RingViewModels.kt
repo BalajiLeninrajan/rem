@@ -13,7 +13,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Sends scans to the controller and remembers the last rejected one for a few seconds. */
+/**
+ * Sends scans to the controller and remembers the last rejected one for a few seconds.
+ * The tap that opens the scanner starts the quiet period, see [RingNavHost].
+ */
 internal class RingScannerViewModel(private val controller: RingController) : ViewModel() {
     /** The barcode that was just scanned and is not registered, or null. */
     var rejected: ScannedBarcode? by mutableStateOf(null)

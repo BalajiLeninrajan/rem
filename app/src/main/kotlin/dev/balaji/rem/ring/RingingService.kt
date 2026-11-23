@@ -96,7 +96,7 @@ class RingingService : Service() {
     private fun follow(command: RingCommand) {
         when (command) {
             RingCommand.Wait -> Unit
-            is RingCommand.Play -> play(command.spec)
+            is RingCommand.Play -> play(command.spec, command.quiet)
             RingCommand.Stop -> {
                 stopPlayback()
                 // With the id, a start that arrived for the next ring keeps the service alive.
@@ -105,11 +105,18 @@ class RingingService : Service() {
         }
     }
 
-    private fun play(spec: RingSpec) {
-        if (playback?.spec == spec) return
+    private fun play(spec: RingSpec, quiet: Boolean) {
+        val current = playback
+        if (current != null && current.spec == spec) {
+            current.setQuiet(quiet)
+            return
+        }
         stopPlayback()
         show(notifications.ringing(spec.label, spec.startedAt))
-        playback = RingPlayback(this, spec).also { it.start() }
+        playback = RingPlayback(this, spec).also {
+            it.setQuiet(quiet)
+            it.start()
+        }
     }
 
     private fun stopPlayback() {

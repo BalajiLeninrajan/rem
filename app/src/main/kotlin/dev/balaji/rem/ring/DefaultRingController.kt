@@ -2,6 +2,7 @@ package dev.balaji.rem.ring
 
 import dev.balaji.rem.core.Alarm
 import dev.balaji.rem.core.Barcode
+import dev.balaji.rem.core.BarcodeKey
 import dev.balaji.rem.core.FallbackCode
 import dev.balaji.rem.core.RemSettings
 import dev.balaji.rem.core.RingLimits
@@ -39,13 +40,20 @@ import kotlinx.coroutines.withTimeout
  * Owns the one live ring. The service only plays what [command] says, and the screens
  * only show [state], so a ring can end from here without either of them being alive.
  *
- * The barcodes that can dismiss a ring are the ones registered when it started. Deleting
- * them all from the main app during a ring does not unlock the plain dismiss button, and
- * a ring picked up again after a process death keeps what its record says about that.
+ * The barcodes that can dismiss a ring are the ones registered on its alarm when it
+ * started. Deleting them all from the main app during a ring does not unlock the plain
+ * dismiss button. A ring picked up again after a process death keeps what its record says
+ * about that, and takes the barcodes its record lists as well as the ones on its alarm
+ * now, so deleting the alarm during the ring leaves the scanner working. The test alarm
+ * has no stored alarm and needs no barcode.
  *
  * A ring that ends without a dismissal while its deadline is still ahead stays owed: its
  * fired record is removed and a one-shot alarm stays on, so the next reschedule plans the
  * deadline again.
+ *
+ * While the user scans or types the code, the ring can be quiet for a while
+ * ([RingLimits.QUIET_PERIOD]). That lives only in memory: a ring picked up again after a
+ * process death starts loud, and the 30 minute limit and the watchdog do not change.
  *
  * @param watchdog an alarm clock entry kept a minute ahead while a ring is live. It
  *   brings the ring back when the process dies, and after a reboot.
@@ -74,11 +82,15 @@ internal class DefaultRingController(
         @Volatile
         var label: String = ""
 
-        /** The barcodes registered when the ring started. Null until they are loaded. */
+        /** The barcodes this ring takes. Null until they are loaded. */
         @Volatile
         var registered: List<Barcode>? = null
 
-        /** False only when the ring started with no barcode registered. Then the plain button works. */
+        /** What the persisted record lists as the barcodes of the ring's start. */
+        @Volatile
+        var recordedBarcodes: List<BarcodeKey> = emptyList()
+
+        /** False only when the ring started with no barcode on its alarm. Then the plain button works. */
         @Volatile
         var requiresBarcode: Boolean = true
 
@@ -91,6 +103,20 @@ internal class DefaultRingController(
         @Volatile
         var timeout: Job? = null
 
+        /** What the service plays. Null until the alarm is loaded. */
+        @Volatile
+        var spec: RingSpec? = null
+
+        /** When the quiet period ends, or null while the ring is loud. */
+        @Volatile
+        var quietUntil: Instant? = null
+
+        /** Counts quiet periods, so the timer of an earlier one cannot end a later one. Only touched under the lock. */
+        var quietPeriod: Int = 0
+
+        @Volatile
+        var quietTimer: Job? = null
+
         val isTest: Boolean get() = ring.alarmId == AlarmBroadcast.TEST_ALARM_ID
 
         fun record() = RingingRecord(
@@ -99,6 +125,7 @@ internal class DefaultRingController(
             ringAt = ring.ringAt.truncatedTo(ChronoUnit.MILLIS),
             deadline = ring.deadline.truncatedTo(ChronoUnit.MILLIS),
             requiresBarcode = requiresBarcode,
+            barcodes = recordedBarcodes,
         )
     }
 
@@ -187,6 +214,38 @@ internal class DefaultRingController(
         return code
     }
 
+    override fun startQuietPeriod() {
+        synchronized(lock) {
+            val mine = live ?: return
+            val period = ++mine.quietPeriod
+            mine.quietUntil = clock.instant().plus(RingLimits.QUIET_PERIOD).truncatedTo(ChronoUnit.MILLIS)
+            mine.quietTimer?.cancel()
+            mine.quietTimer = scope.launch {
+                delay(RingLimits.QUIET_PERIOD.toMillis())
+                synchronized(lock) {
+                    if (live === mine && mine.quietPeriod == period) endQuiet(mine)
+                }
+            }
+            publishState(mine)
+        }
+    }
+
+    override fun endQuietPeriod() {
+        synchronized(lock) {
+            val mine = live ?: return
+            mine.quietTimer?.cancel()
+            endQuiet(mine)
+        }
+    }
+
+    /** Call with [lock] held and [mine] live. */
+    private fun endQuiet(mine: Live) {
+        if (mine.quietUntil == null) return
+        mine.quietPeriod++
+        mine.quietUntil = null
+        publishState(mine)
+    }
+
     override suspend fun recoverInterruptedRing() {
         attempt {
             val record = ringState.currentRinging() ?: return@attempt
@@ -231,7 +290,7 @@ internal class DefaultRingController(
             claimed.label = labelOf(ring.alarmId, alarm = null)
             live = claimed
             // Ringing from this moment, so the screens never see Idle between the broadcast and the loaded alarm.
-            ringingState.value = claimed.toState(requiresBarcode = true)
+            ringingState.value = claimed.toState()
             serviceCommand.value = RingCommand.Wait
             return claimed
         }
@@ -279,32 +338,37 @@ internal class DefaultRingController(
      *
      * A storage failure must not silence an alarm, so every failed read falls back to a
      * default that rings. Barcodes that cannot be read leave no plain stop button: the
-     * typed code is then the way out.
+     * typed code is then the way out. The test alarm rings with the defaults of [Alarm].
      */
     private suspend fun load(mine: Live): RingSpec? {
         val id = mine.ring.alarmId
         val alarm = if (mine.isTest) null else loadOr(Alarm(id = id, time = LocalTime.MIDNIGHT)) { alarms.get(id) }
         if (!mine.isTest && !mine.resumed && alarm?.enabled != true) return null
-        val registered = loadBarcodes()
+        val registered = if (mine.isTest) emptyList() else loadBarcodes(id)
         mine.registered = registered.orEmpty()
+        mine.recordedBarcodes = registered.orEmpty().map { it.key }
         mine.requiresBarcode = registered == null || registered.isNotEmpty()
         if (!adoptRecord(mine)) return null
         mine.label = labelOf(id, alarm)
+        val sound = alarm ?: Alarm(id = id, time = LocalTime.MIDNIGHT)
+        val global = loadOr(RemSettings.DEFAULT) { settings.current() }
         return RingSpec(
             alarmId = id,
             label = mine.label,
-            ringtoneUri = alarm?.ringtoneUri,
-            vibrate = alarm?.vibrate ?: true,
-            headphonesOnly = alarm?.headphonesOnly ?: false,
-            settings = loadOr(RemSettings.DEFAULT) { settings.current() },
+            ringtoneUri = sound.ringtoneUri,
+            vibrate = sound.vibrate,
+            minRingVolumePercent = sound.minRingVolumePercent,
+            volumeRampSeconds = sound.volumeRampSeconds,
+            headphonesOnly = global.headphonesOnly,
+            speakerFallbackSeconds = global.speakerFallbackSeconds,
             startedAt = mine.startedAt,
         )
     }
 
-    /** Null when the barcodes could not be read, even at the second try. */
-    private suspend fun loadBarcodes(): List<Barcode>? {
+    /** The barcodes of [alarmId]. Null when they could not be read, even at the second try. */
+    private suspend fun loadBarcodes(alarmId: Long): List<Barcode>? {
         repeat(BARCODE_READS) {
-            val read: List<Barcode>? = loadOr(null) { barcodes.all() }
+            val read: List<Barcode>? = loadOr(null) { barcodes.all(alarmId) }
             if (read != null) return read
         }
         return null
@@ -313,16 +377,27 @@ internal class DefaultRingController(
     private fun publish(mine: Live, spec: RingSpec): Boolean {
         synchronized(lock) {
             if (live !== mine) return false
-            ringingState.value = mine.toState(requiresBarcode = mine.requiresBarcode)
-            serviceCommand.value = RingCommand.Play(spec)
+            mine.spec = spec
+            publishState(mine)
             return true
         }
     }
 
     /**
+     * Shows [mine] on the screens and, once its alarm is loaded, tells the service what to
+     * play. A quiet period that starts before then is applied by [publish]. Call with
+     * [lock] held and [mine] live.
+     */
+    private fun publishState(mine: Live) {
+        ringingState.value = mine.toState()
+        mine.spec?.let { serviceCommand.value = RingCommand.Play(it, quiet = mine.quietUntil != null) }
+    }
+
+    /**
      * Makes the persisted record describe [mine]. A new ring writes its record. A resumed
-     * ring keeps the start time and the barcode rule of the record it continues, and is dropped when that
-     * record is gone, because then the ring already ended or was reported as missed.
+     * ring keeps the start time and the barcode rule of the record it continues, also takes
+     * the barcodes that record lists, and is dropped when that record is gone, because then
+     * the ring already ended or was reported as missed.
      */
     private suspend fun adoptRecord(mine: Live): Boolean {
         if (!mine.resumed) {
@@ -332,6 +407,9 @@ internal class DefaultRingController(
         val record = loadOr(null) { ringState.currentRinging() }?.takeIf { isLive(it) } ?: return false
         mine.startedAt = record.startedAt
         mine.requiresBarcode = record.requiresBarcode
+        mine.recordedBarcodes = record.barcodes
+        val started = record.barcodes.map { Barcode(label = "", format = it.format, value = it.value) }
+        mine.registered = (mine.registered.orEmpty() + started).distinctBy { it.key }
         return true
     }
 
@@ -347,6 +425,7 @@ internal class DefaultRingController(
 
     private suspend fun cleanUp(mine: Live, ending: Ending) {
         mine.timeout?.cancel()
+        mine.quietTimer?.cancel()
         // Joined, so a re-arm that is under way cannot land after the cancel below.
         mine.rearm?.cancelAndJoin()
         if (live == null) attempt { watchdog.cancel() }
@@ -428,12 +507,14 @@ internal class DefaultRingController(
     private fun labelOf(alarmId: Long, alarm: Alarm?): String =
         if (alarmId == AlarmBroadcast.TEST_ALARM_ID) testAlarmLabel else alarm?.label.orEmpty()
 
-    private fun Live.toState(requiresBarcode: Boolean) = RingingState.Ringing(
+    /** Until the alarm is loaded the ring counts as needing a barcode, so no plain stop button shows too early. */
+    private fun Live.toState() = RingingState.Ringing(
         alarmId = ring.alarmId,
         label = label,
         startedAt = startedAt,
         deadline = ring.deadline,
-        requiresBarcode = requiresBarcode,
+        requiresBarcode = spec == null || requiresBarcode,
+        quietUntil = quietUntil,
     )
 
     private suspend fun <T> loadOr(default: T, block: suspend () -> T): T =

@@ -1,18 +1,25 @@
 package dev.balaji.rem.ring
 
-import dev.balaji.rem.core.RemSettings
 import dev.balaji.rem.core.ScheduledRing
 import java.time.Instant
 import kotlinx.coroutines.flow.StateFlow
 
-/** Everything the service needs to play one ring. Loaded once when the ring starts. */
+/**
+ * Everything the service needs to play one ring. Loaded once when the ring starts. The
+ * tone, vibration and volume come from the alarm, the routing from the global settings.
+ *
+ * @property minRingVolumePercent see [dev.balaji.rem.core.Alarm.minRingVolumePercent].
+ * @property volumeRampSeconds 0 disables the ramp.
+ */
 internal data class RingSpec(
     val alarmId: Long,
     val label: String,
     val ringtoneUri: String?,
     val vibrate: Boolean,
+    val minRingVolumePercent: Int,
+    val volumeRampSeconds: Int,
     val headphonesOnly: Boolean,
-    val settings: RemSettings,
+    val speakerFallbackSeconds: Int,
     val startedAt: Instant,
 )
 
@@ -24,7 +31,11 @@ internal sealed interface RingCommand {
     /** A ring has started and its alarm is still being loaded. Stay in the foreground. */
     data object Wait : RingCommand
 
-    data class Play(val spec: RingSpec) : RingCommand
+    /**
+     * Play [spec]. While [quiet] the tone is paused and the vibration is off, but the
+     * volume floor still holds. A change of [quiet] alone must not restart the ring.
+     */
+    data class Play(val spec: RingSpec, val quiet: Boolean) : RingCommand
 }
 
 /** The side of the ring controller that only [RingingService] talks to. */

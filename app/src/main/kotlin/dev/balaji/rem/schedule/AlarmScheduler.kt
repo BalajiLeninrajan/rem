@@ -22,7 +22,8 @@ interface AlarmScheduler {
      * 2. reports rings that should have fired and did not, through `AlarmNotifier.notifyMissed`
      *    (see `checkMissed` in :core). A ring is reported by the run a few seconds after
      *    the one that first saw it overdue, which this class starts itself,
-     * 3. computes the plan with `planSchedule`,
+     * 3. computes the plan with `planSchedule`. A late ring whose deadline has passed stays
+     *    planned until it fires or its time passes,
      * 4. sets one `setAlarmClock` alarm per planned ring and cancels the ones no longer planned,
      * 5. persists the scheduled rings and publishes [plan].
      *

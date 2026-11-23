@@ -72,6 +72,19 @@ class AlarmReceiverTest {
     }
 
     @Test
+    fun `a late ring that did not start counts as fired, as its deadline has passed`() = runTest {
+        val container = app.useFakeContainer(backgroundScope)
+        container.ringController.accepts = false
+        val passed = Instant.ofEpochMilli(System.currentTimeMillis()).minusSeconds(600)
+        val late = ScheduledRing(alarmId = 5, ringAt = passed.plusSeconds(900), deadline = passed)
+
+        AlarmReceiver().onReceive(app, AlarmBroadcast.fireIntent(app, late))
+        runCurrent()
+
+        assertEquals(listOf(mapOf(5L to passed)), container.alarmScheduler.reschedules)
+    }
+
+    @Test
     fun `the watchdog broadcast resumes and neither starts a ring nor records a fire`() = runTest {
         val container = app.useFakeContainer(backgroundScope)
 

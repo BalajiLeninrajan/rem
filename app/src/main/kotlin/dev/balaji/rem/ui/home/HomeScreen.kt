@@ -19,7 +19,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
-import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -75,7 +74,7 @@ private val RefreshPeriod = 15.seconds
 fun HomeScreen(
     onAddAlarm: () -> Unit,
     onEditAlarm: (alarmId: Long) -> Unit,
-    onOpenBarcodes: () -> Unit,
+    onDuplicateAlarm: (alarmId: Long) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenReliability: () -> Unit,
     onOpenOnboarding: () -> Unit,
@@ -124,11 +123,17 @@ fun HomeScreen(
         snackbarHostState = snackbarHostState,
         onAddAlarm = onAddAlarm,
         onEditAlarm = onEditAlarm,
+        onDuplicateAlarm = onDuplicateAlarm,
         onEnabledChange = viewModel::setEnabled,
         onDeleteAlarm = viewModel::delete,
         onGoToSleep = viewModel::goToSleep,
         onEndSleep = viewModel::endSleep,
-        onOpenBarcodes = onOpenBarcodes,
+        onLateChange = { alarmId, deadline, accept ->
+            if (accept) viewModel.acceptLate(alarmId, deadline) else viewModel.revokeLate(alarmId, deadline)
+        },
+        onLateChoice = viewModel::setLateChoice,
+        onConfirmLatePrompt = viewModel::confirmLatePrompt,
+        onDismissLatePrompt = viewModel::dismissLatePrompt,
         onOpenSettings = onOpenSettings,
         onOpenReliability = onOpenReliability,
         onOpenRinging = { context.startActivity(RingContract.activityIntent(context)) },
@@ -142,25 +147,29 @@ fun HomeContent(
     snackbarHostState: SnackbarHostState,
     onAddAlarm: () -> Unit,
     onEditAlarm: (alarmId: Long) -> Unit,
+    onDuplicateAlarm: (alarmId: Long) -> Unit,
     onEnabledChange: (alarmId: Long, enabled: Boolean) -> Unit,
     onDeleteAlarm: (alarmId: Long) -> Unit,
     onGoToSleep: () -> Unit,
     onEndSleep: () -> Unit,
-    onOpenBarcodes: () -> Unit,
+    onLateChange: (alarmId: Long, deadline: Instant, accept: Boolean) -> Unit,
+    onLateChoice: (alarmId: Long, accept: Boolean) -> Unit,
+    onConfirmLatePrompt: () -> Unit,
+    onDismissLatePrompt: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenReliability: () -> Unit,
     onOpenRinging: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    state.latePrompt?.let { prompt ->
+        LatePromptDialog(prompt, state.zone, onLateChoice, onConfirmLatePrompt, onDismissLatePrompt)
+    }
     Scaffold(
         modifier = modifier,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.screen_home)) },
                 actions = {
-                    IconButton(onClick = onOpenBarcodes) {
-                        Icon(Icons.Filled.QrCodeScanner, contentDescription = stringResource(R.string.screen_barcodes))
-                    }
                     IconButton(onClick = onOpenReliability) {
                         Icon(Icons.Filled.Security, contentDescription = stringResource(R.string.screen_reliability))
                     }
@@ -180,7 +189,7 @@ fun HomeContent(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         val header: @Composable () -> Unit = {
-            HomeHeader(state, onGoToSleep, onEndSleep, onOpenBarcodes, onOpenReliability, onOpenRinging)
+            HomeHeader(state, onGoToSleep, onEndSleep, onOpenReliability, onOpenRinging)
         }
         BoxWithConstraints(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             if (state.loading) {
@@ -195,11 +204,20 @@ fun HomeContent(
                     ) {
                         header()
                     }
-                    AlarmList(state, null, onEditAlarm, onEnabledChange, onDeleteAlarm, Modifier.weight(1f))
+                    AlarmList(
+                        state,
+                        null,
+                        onEditAlarm,
+                        onDuplicateAlarm,
+                        onEnabledChange,
+                        onDeleteAlarm,
+                        onLateChange,
+                        Modifier.weight(1f),
+                    )
                 }
             } else {
                 CenteredContent {
-                    AlarmList(state, header, onEditAlarm, onEnabledChange, onDeleteAlarm)
+                    AlarmList(state, header, onEditAlarm, onDuplicateAlarm, onEnabledChange, onDeleteAlarm, onLateChange)
                 }
             }
         }
@@ -208,7 +226,7 @@ fun HomeContent(
 
 /** False when the header would draw nothing, so a wide window does not get an empty side pane. */
 private val HomeUiState.hasHeader: Boolean
-    get() = ringing || noBarcodes || reliabilityProblems > 0 || sleep != SleepState.Hidden
+    get() = ringing || reliabilityProblems > 0 || sleep != SleepState.Hidden
 
 /** Warnings first, then the sleep control. Shared by the single column and the side pane. */
 @Composable
@@ -216,7 +234,6 @@ private fun HomeHeader(
     state: HomeUiState,
     onGoToSleep: () -> Unit,
     onEndSleep: () -> Unit,
-    onOpenBarcodes: () -> Unit,
     onOpenReliability: () -> Unit,
     onOpenRinging: () -> Unit,
 ) {
@@ -226,13 +243,6 @@ private fun HomeHeader(
                 message = stringResource(R.string.ui_home_warning_ringing),
                 actionLabel = stringResource(R.string.ui_home_warning_ringing_action),
                 onAction = onOpenRinging,
-            )
-        }
-        if (state.noBarcodes) {
-            WarningBanner(
-                message = stringResource(R.string.ui_home_warning_no_barcode),
-                actionLabel = stringResource(R.string.ui_home_warning_no_barcode_action),
-                onAction = onOpenBarcodes,
             )
         }
         if (state.reliabilityProblems > 0) {
@@ -255,8 +265,10 @@ private fun AlarmList(
     state: HomeUiState,
     header: (@Composable () -> Unit)?,
     onEditAlarm: (alarmId: Long) -> Unit,
+    onDuplicateAlarm: (alarmId: Long) -> Unit,
     onEnabledChange: (alarmId: Long, enabled: Boolean) -> Unit,
     onDeleteAlarm: (alarmId: Long) -> Unit,
+    onLateChange: (alarmId: Long, deadline: Instant, accept: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -278,7 +290,9 @@ private fun AlarmList(
                 zone = state.zone,
                 onClick = { onEditAlarm(row.alarm.id) },
                 onEnabledChange = { enabled -> onEnabledChange(row.alarm.id, enabled) },
+                onDuplicate = { onDuplicateAlarm(row.alarm.id) },
                 onDelete = { onDeleteAlarm(row.alarm.id) },
+                onLateChange = { deadline, accept -> onLateChange(row.alarm.id, deadline, accept) },
             )
         }
     }
@@ -318,11 +332,14 @@ private fun previewState(): HomeUiState {
     return HomeUiState(
         loading = false,
         alarms = listOf(
-            AlarmRow(Alarm(id = 1, time = LocalTime.of(7, 0), label = "Work", repeatDays = RepeatDays.WEEKDAYS), ring),
+            AlarmRow(
+                Alarm(id = 1, time = LocalTime.of(7, 0), label = "Work", repeatDays = RepeatDays.WEEKDAYS),
+                ring,
+                noBarcode = true,
+            ),
             AlarmRow(Alarm(id = 2, time = LocalTime.of(9, 30), enabled = false), nextRing = null),
         ),
         sleep = SleepState.Active(startedAt = now, tonight = ring),
-        noBarcodes = true,
         reliabilityProblems = 1,
         now = now,
     )
@@ -336,11 +353,15 @@ private fun HomePreviewContent(state: HomeUiState) {
             snackbarHostState = remember { SnackbarHostState() },
             onAddAlarm = {},
             onEditAlarm = {},
+            onDuplicateAlarm = {},
             onEnabledChange = { _, _ -> },
             onDeleteAlarm = {},
             onGoToSleep = {},
             onEndSleep = {},
-            onOpenBarcodes = {},
+            onLateChange = { _, _, _ -> },
+            onLateChoice = { _, _ -> },
+            onConfirmLatePrompt = {},
+            onDismissLatePrompt = {},
             onOpenSettings = {},
             onOpenReliability = {},
             onOpenRinging = {},

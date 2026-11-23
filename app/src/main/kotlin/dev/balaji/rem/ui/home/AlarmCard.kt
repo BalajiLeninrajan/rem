@@ -3,11 +3,20 @@ package dev.balaji.rem.ui.home
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MoreTime
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -17,6 +26,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,7 +55,11 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 
-/** One alarm: the deadline large, label and repeat days, the computed ring time, the switch and a delete menu. */
+/**
+ * One alarm: the deadline large, label and repeat days, the computed ring time, a warning
+ * when it is on without a barcode, the switch and a menu to duplicate or delete it. During
+ * a sleep session it offers the ring's late option, or the way back to the alarm time.
+ */
 @Composable
 fun AlarmCard(
     row: AlarmRow,
@@ -53,7 +67,9 @@ fun AlarmCard(
     zone: ZoneId,
     onClick: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
+    onDuplicate: () -> Unit,
     onDelete: () -> Unit,
+    onLateChange: (deadline: Instant, accept: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val alarm = row.alarm
@@ -83,9 +99,48 @@ fun AlarmCard(
                     color = if (alarm.enabled) colors.primary else colors.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+                val late = row.late
+                val ring = row.nextRing
+                if (late != null && ring != null) {
+                    TextButton(
+                        onClick = { onLateChange(ring.deadline, !late.accepted) },
+                        contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
+                        modifier = Modifier.offset(x = (-12).dp),
+                    ) {
+                        Icon(
+                            imageVector = if (late.accepted) Icons.AutoMirrored.Filled.Undo else Icons.Filled.MoreTime,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (late.accepted) {
+                                stringResource(R.string.ui_home_late_revoke, clockText(ring.deadline, zone))
+                            } else {
+                                stringResource(R.string.ui_home_late_offer, clockText(late.option.ringAt, zone))
+                            },
+                        )
+                    }
+                }
+                if (alarm.enabled && row.noBarcode) {
+                    Row(modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = colors.error,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.ui_home_alarm_no_barcode),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.error,
+                        )
+                    }
+                }
             }
             Column(horizontalAlignment = Alignment.End) {
-                AlarmMenu(onDelete = onDelete)
+                AlarmMenu(onDuplicate = onDuplicate, onDelete = onDelete)
                 val switchLabel = stringResource(R.string.ui_home_alarm_switch, clockText(alarm.time))
                 Switch(
                     checked = alarm.enabled,
@@ -98,13 +153,21 @@ fun AlarmCard(
 }
 
 @Composable
-private fun AlarmMenu(onDelete: () -> Unit) {
+private fun AlarmMenu(onDuplicate: () -> Unit, onDelete: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
             Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(R.string.ui_action_more))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.ui_action_duplicate)) },
+                leadingIcon = { Icon(imageVector = Icons.Filled.ContentCopy, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onDuplicate()
+                },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.ui_action_delete)) },
                 leadingIcon = { Icon(imageVector = Icons.Filled.Delete, contentDescription = null) },
@@ -153,7 +216,9 @@ private fun AlarmCardPreview() {
             zone = ZoneOffset.UTC,
             onClick = {},
             onEnabledChange = {},
+            onDuplicate = {},
             onDelete = {},
+            onLateChange = { _, _ -> },
         )
     }
 }

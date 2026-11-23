@@ -2,6 +2,7 @@ package dev.balaji.rem.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -10,8 +11,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import dev.balaji.rem.core.Alarm
 import dev.balaji.rem.ui.alarm.AlarmEditorScreen
+import dev.balaji.rem.ui.alarm.alarmEditorViewModel
 import dev.balaji.rem.ui.barcodes.BarcodeScanScreen
-import dev.balaji.rem.ui.barcodes.BarcodesScreen
 import dev.balaji.rem.ui.home.HomeScreen
 import dev.balaji.rem.ui.onboarding.OnboardingScreen
 import dev.balaji.rem.ui.reliability.ReliabilityScreen
@@ -39,27 +40,35 @@ fun RemNavHost(
             HomeScreen(
                 onAddAlarm = { navController.open(AlarmEditorRoute(Alarm.NEW_ID)) },
                 onEditAlarm = { alarmId -> navController.open(AlarmEditorRoute(alarmId)) },
-                onOpenBarcodes = { navController.open(BarcodesRoute) },
+                onDuplicateAlarm = { alarmId -> navController.open(AlarmEditorRoute(copyFromId = alarmId)) },
                 onOpenSettings = { navController.open(SettingsRoute) },
                 onOpenReliability = { navController.open(ReliabilityRoute) },
                 onOpenOnboarding = { navController.open(OnboardingRoute) },
             )
         }
         composable<AlarmEditorRoute> { entry ->
+            val route = entry.toRoute<AlarmEditorRoute>()
             AlarmEditorScreen(
-                alarmId = entry.toRoute<AlarmEditorRoute>().alarmId,
+                alarmId = route.alarmId,
+                copyFromId = route.copyFromId,
+                onScanBarcode = { testOnly -> navController.open(BarcodeScanRoute(testOnly)) },
+                // The copy opens on top, so this editor and its unsaved changes are there again after it.
+                // Not open(): single top would hand this editor's entry, and its view model, to the copy.
+                onDuplicate = {
+                    if (navController.currentBackStackEntry?.id == entry.id) {
+                        navController.navigate(AlarmEditorRoute(copyFromId = route.alarmId))
+                    }
+                },
                 onDone = navController::back,
             )
         }
-        composable<BarcodesRoute> {
-            BarcodesScreen(
-                onScan = { testOnly -> navController.open(BarcodeScanRoute(testOnly)) },
-                onBack = navController::back,
-            )
-        }
         composable<BarcodeScanRoute> { entry ->
+            // The scanner is only opened from the editor, so the editor is right below it.
+            val editorEntry = remember(entry) { navController.getBackStackEntry<AlarmEditorRoute>() }
+            val editorRoute = editorEntry.toRoute<AlarmEditorRoute>()
             BarcodeScanScreen(
                 testOnly = entry.toRoute<BarcodeScanRoute>().testOnly,
+                target = alarmEditorViewModel(editorRoute.alarmId, editorRoute.copyFromId, owner = editorEntry),
                 onDone = navController::back,
             )
         }
@@ -68,15 +77,15 @@ fun RemNavHost(
         }
         composable<ReliabilityRoute> {
             ReliabilityScreen(
-                onOpenBarcodes = { navController.open(BarcodesRoute) },
+                onEditAlarm = { alarmId -> navController.open(AlarmEditorRoute(alarmId)) },
                 onBack = navController::back,
             )
         }
         composable<OnboardingRoute> {
             OnboardingScreen(
                 onDone = navController::back,
-                onAddBarcode = {
-                    navController.navigate(BarcodesRoute) {
+                onAddAlarm = {
+                    navController.navigate(AlarmEditorRoute(Alarm.NEW_ID)) {
                         popUpTo(OnboardingRoute) { inclusive = true }
                     }
                 },

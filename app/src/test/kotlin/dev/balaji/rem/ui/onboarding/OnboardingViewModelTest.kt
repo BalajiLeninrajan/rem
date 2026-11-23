@@ -36,10 +36,10 @@ class OnboardingViewModelTest {
     fun `finishing stores that onboarding is done and says where to go`() = runTest {
         val viewModel = OnboardingViewModel(settings)
 
-        viewModel.finish(OnboardingExit.ADD_BARCODE)
+        viewModel.finish(OnboardingExit.ADD_ALARM)
         advanceUntilIdle()
 
         assertTrue(settings.onboardingDone.first())
-        assertEquals(OnboardingExit.ADD_BARCODE, viewModel.state.value.exit)
+        assertEquals(OnboardingExit.ADD_ALARM, viewModel.state.value.exit)
     }
 }

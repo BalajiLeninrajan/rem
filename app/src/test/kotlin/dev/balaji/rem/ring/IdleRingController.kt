@@ -25,5 +25,15 @@ class IdleRingController : RingController {
 
     override fun newFallbackCode(): String = FallbackCode.generate(random)
 
+    /** How often a screen asked for a quiet period. */
+    var quietPeriodsStarted = 0
+        private set
+
+    override fun startQuietPeriod() {
+        quietPeriodsStarted++
+    }
+
+    override fun endQuietPeriod() = Unit
+
     override suspend fun recoverInterruptedRing() = Unit
 }

@@ -1,5 +1,7 @@
 package dev.balaji.rem.data.contract
 
+import dev.balaji.rem.core.BarcodeFormat
+import dev.balaji.rem.core.BarcodeKey
 import dev.balaji.rem.core.ScheduledRing
 import dev.balaji.rem.data.RingStateStore
 import dev.balaji.rem.data.RingingRecord
@@ -87,6 +89,21 @@ abstract class RingStateStoreContract {
         assertTrue(store.clearRinging(plain))
         store.setRinging(record)
         assertEquals(true, store.currentRinging()?.requiresBarcode)
+    }
+
+    @Test
+    fun `a ring keeps the barcodes it started with across a write and a clear`() = runTest {
+        val store = createStore()
+        val keys = listOf(BarcodeKey(BarcodeFormat.EAN_13, "4006381333931"), BarcodeKey(BarcodeFormat.QR_CODE, "Kitchen"))
+        val withBarcodes = record.copy(barcodes = keys)
+
+        store.setRinging(withBarcodes)
+
+        assertEquals(withBarcodes, store.currentRinging())
+        assertFalse(store.clearRinging(record))
+        assertTrue(store.clearRinging(withBarcodes))
+        store.setRinging(record)
+        assertEquals(emptyList<BarcodeKey>(), store.currentRinging()?.barcodes)
     }
 
     @Test

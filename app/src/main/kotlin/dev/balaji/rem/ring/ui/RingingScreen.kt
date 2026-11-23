@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.balaji.rem.R
 import dev.balaji.rem.di.LocalAppContainer
@@ -43,7 +44,11 @@ import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** The time, the alarm label, the "five more minutes" button that opens the scanner, and the "can't scan?" link. */
+/**
+ * The time, the alarm label, the "scan to dismiss" button that opens the scanner, and the
+ * "can't scan?" link. The alarm is loud whenever this screen shows: coming back here ends
+ * the quiet period that opening the scanner or the typed fallback started.
+ */
 @Composable
 fun RingingScreen(
     onOpenScanner: () -> Unit,
@@ -58,6 +63,13 @@ fun RingingScreen(
 
     // Back does nothing while an alarm rings.
     BackHandler {}
+
+    // Runs each time this screen settles on top: on the first show and on every return from the scanner or the typed code.
+    // A predictive back gesture only brings this entry to STARTED while it previews it, so a cancelled gesture keeps the quiet.
+    LifecycleResumeEffect(controller) {
+        controller.endQuietPeriod()
+        onPauseOrDispose {}
+    }
 
     val header: @Composable (Modifier) -> Unit = { headerModifier ->
         RingHeader(time = currentTime(container.clock), label = ringing?.label.orEmpty(), modifier = headerModifier)
@@ -129,7 +141,7 @@ private fun RingActions(
 ) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         if (requiresBarcode) {
-            BigButton(text = stringResource(R.string.ring_five_more_minutes), onClick = onOpenScanner)
+            BigButton(text = stringResource(R.string.ring_scan_to_dismiss), onClick = onOpenScanner)
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onOpenTypedFallback) {
                 Text(stringResource(R.string.ring_cant_scan))
