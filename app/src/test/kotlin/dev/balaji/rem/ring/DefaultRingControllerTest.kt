@@ -46,11 +46,22 @@ class DefaultRingControllerTest {
     private val ringState = InMemoryRingStateStore()
 
     private val missed = mutableListOf<MissedAlarm>()
+
+    /** The "snoozed until" notifications that are up, by alarm id. */
+    private val snoozeNotifications = mutableMapOf<Long, SnoozedAlarm>()
     private val notifier = object : AlarmNotifier {
         override fun ensureChannels() = Unit
 
         override fun notifyMissed(missed: MissedAlarm) {
             this@DefaultRingControllerTest.missed += missed
+        }
+
+        override fun notifySnoozed(snoozed: SnoozedAlarm) {
+            snoozeNotifications[snoozed.alarmId] = snoozed
+        }
+
+        override fun cancelSnoozed(alarmId: Long) {
+            snoozeNotifications -= alarmId
         }
     }
     private val serviceStarts = mutableListOf<ScheduledRing>()
@@ -81,6 +92,21 @@ class DefaultRingControllerTest {
         }
     }
 
+    /** The snooze entries that are set: alarm id to the ring and when it fires. */
+    private val snoozeEntries = mutableMapOf<Long, Pair<ScheduledRing, Instant>>()
+    private var snoozeEntriesRefused = false
+    private val snoozeAlarms = object : SnoozeAlarms {
+        override fun setSnooze(ring: ScheduledRing, at: Instant): Boolean {
+            if (snoozeEntriesRefused) return false
+            snoozeEntries[ring.alarmId] = ring to at
+            return true
+        }
+
+        override fun cancelSnooze(alarmId: Long) {
+            snoozeEntries -= alarmId
+        }
+    }
+
     private val toothpaste = ScannedCode(BarcodeFormat.EAN_13, "4006381333931")
 
     private fun TestScope.controller() = DefaultRingController(
@@ -95,6 +121,7 @@ class DefaultRingControllerTest {
             serviceStarts += ring
         },
         watchdog = watchdog,
+        snoozeAlarms = snoozeAlarms,
         reschedule = { reschedules++ },
         clock = clock,
         scope = backgroundScope,
@@ -147,7 +174,10 @@ class DefaultRingControllerTest {
         val controller = ringing(id)
 
         assertEquals(RingingRecord(id, now, now, deadline, barcodes = listOf(toothpaste.normalised())), ringState.currentRinging())
-        assertEquals(RingingState.Ringing(id, "Work", now, deadline, requiresBarcode = true), controller.state.value)
+        assertEquals(
+            RingingState.Ringing(id, "Work", now, deadline, requiresBarcode = true, snoozeMinutes = 5, snoozesLeft = 3),
+            controller.state.value,
+        )
         val spec = (controller.command.value as RingCommand.Play).spec
         assertEquals(
             RingSpec(
@@ -160,6 +190,9 @@ class DefaultRingControllerTest {
                 headphonesOnly = true,
                 speakerFallbackSeconds = 45,
                 startedAt = now,
+                requiresBarcode = true,
+                snoozeMinutes = 5,
+                snoozesLeft = 3,
             ),
             spec,
         )
@@ -1002,5 +1035,401 @@ class DefaultRingControllerTest {
         assertNull(sessions.current())
         assertEquals(false, alarms.get(id)?.enabled)
     }
-}
 
+    private val DefaultRingController.ringingState: RingingState.Ringing get() = state.value as RingingState.Ringing
+
+    /** Fires the snooze entry of [alarmId] the way AlarmManager does, with the clock at its time. */
+    private fun TestScope.fireSnooze(controller: DefaultRingController, alarmId: Long) {
+        val (ring, at) = snoozeEntries.remove(alarmId)!!
+        if (clock.now < at) clock.now = at
+        controller.endSnooze(ring)
+        runCurrent()
+    }
+
+    @Test
+    fun `a snooze stops the tone and rings again after the alarm's snooze length`() = runTest {
+        val id = alarms.upsert(Alarm(time = LocalTime.of(7, 0), label = "Work", snoozeMinutes = 9))
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        val controller = ringing(id)
+        val until = now.plusSeconds(9 * 60)
+
+        assertEquals(SnoozeResult.SNOOZED, controller.snooze())
+
+        assertEquals(RingCommand.Stop, controller.command.value)
+        val snoozed = RingingState.Snoozed(id, "Work", deadline, until, snoozesLeft = 2, requiresBarcode = true)
+        assertEquals(snoozed, controller.state.value)
+        assertEquals(listOf(snoozed), controller.snoozed.value)
+        assertEquals(ringFor(id) to until, snoozeEntries[id])
+        assertNull(ringState.currentRinging())
+        val keys = listOf(toothpaste.normalised())
+        assertEquals(
+            listOf(RingingRecord(id, now, now, deadline, barcodes = keys, snoozes = 1, snoozedUntil = until)),
+            ringState.currentSnoozed(),
+        )
+        assertEquals(SnoozedAlarm(id, "Work", until), snoozeNotifications[id])
+        assertNull("the watchdog is for a live ring", watchdogEntry)
+        assertTrue(missed.isEmpty())
+        assertEquals(1, reschedules)
+
+        fireSnooze(controller, id)
+
+        assertEquals(listOf(ringFor(id), ringFor(id)), serviceStarts)
+        val again = controller.ringingState
+        assertEquals(until, again.startedAt)
+        assertEquals(2, again.snoozesLeft)
+        assertEquals(9, again.snoozeMinutes)
+        assertTrue(again.requiresBarcode)
+        assertFalse(controller.isQuiet)
+        assertTrue(controller.snoozed.value.isEmpty())
+        assertTrue(ringState.currentSnoozed().isEmpty())
+        assertEquals(RingingRecord(id, until, now, deadline, barcodes = keys, snoozes = 1), ringState.currentRinging())
+        assertTrue(snoozeNotifications.isEmpty())
+        assertEquals(ringFor(id), watchdogEntry?.first)
+        assertEquals(DismissResult.REJECTED, controller.dismissWithoutBarcode())
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithBarcode(toothpaste))
+        assertEquals(RingingState.Idle, controller.state.value)
+    }
+
+    @Test
+    fun `each snooze uses one up, and once they are used up only dismissal is left`() = runTest {
+        val id = alarms.upsert(Alarm(time = LocalTime.of(7, 0), snoozeLimit = 2))
+        val controller = ringing(id)
+        assertEquals(2, controller.ringingState.snoozesLeft)
+        assertEquals(2, (controller.command.value as RingCommand.Play).spec.snoozesLeft)
+
+        controller.snooze()
+        assertEquals(1, (controller.state.value as RingingState.Snoozed).snoozesLeft)
+        fireSnooze(controller, id)
+        assertEquals(1, controller.ringingState.snoozesLeft)
+        assertEquals(1, (controller.command.value as RingCommand.Play).spec.snoozesLeft)
+
+        controller.snooze()
+        assertEquals(0, (controller.state.value as RingingState.Snoozed).snoozesLeft)
+        fireSnooze(controller, id)
+
+        assertFalse(controller.ringingState.canSnooze)
+        assertEquals(0, (controller.command.value as RingCommand.Play).spec.snoozesLeft)
+        assertEquals(2, ringState.currentRinging()?.snoozes)
+        assertEquals(SnoozeResult.REJECTED, controller.snooze())
+        assertTrue(controller.command.value is RingCommand.Play)
+        assertTrue(snoozeEntries.isEmpty())
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithoutBarcode())
+    }
+
+    @Test
+    fun `a snooze is rejected at the limit, while the alarm loads and when its entry cannot be set`() = runTest {
+        val off = alarms.upsert(Alarm(time = LocalTime.of(7, 0), snoozeLimit = 0))
+        val controller = ringing(off)
+        assertFalse(controller.ringingState.canSnooze)
+        assertEquals(SnoozeResult.REJECTED, controller.snooze())
+        assertTrue(controller.command.value is RingCommand.Play)
+        assertTrue(snoozeEntries.isEmpty())
+        controller.dismissWithoutBarcode()
+
+        val id = oneShot()
+        controller.startRinging(ringFor(id))
+        assertEquals("not loaded yet", 0, controller.ringingState.snoozesLeft)
+        assertEquals(SnoozeResult.REJECTED, controller.snooze())
+        runCurrent()
+
+        snoozeEntriesRefused = true
+        assertEquals(SnoozeResult.REJECTED, controller.snooze())
+        assertTrue(controller.command.value is RingCommand.Play)
+        assertEquals(id, ringState.currentRinging()?.alarmId)
+        assertTrue(ringState.currentSnoozed().isEmpty())
+
+        controller.dismissWithoutBarcode()
+        assertEquals(SnoozeResult.NOT_RINGING, controller.snooze())
+    }
+
+    @Test
+    fun `a snooze neither ends the session nor disables a one-shot alarm, and the dismissal after it does both`() = runTest {
+        val id = oneShot()
+        sessions.start(now.minusSeconds(8 * 3600))
+        ringState.markFired(id, deadline)
+        val controller = ringing(id)
+
+        controller.snooze()
+        // The deadline passes while the ring is snoozed.
+        clock.now = deadline.plusSeconds(60)
+
+        assertEquals(true, alarms.get(id)?.enabled)
+        assertEquals(now.minusSeconds(8 * 3600), sessions.current()?.startedAt)
+        assertEquals(mapOf(id to deadline), ringState.lastFired())
+        assertTrue(missed.isEmpty())
+
+        fireSnooze(controller, id)
+        assertEquals(true, alarms.get(id)?.enabled)
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithoutBarcode())
+
+        assertEquals(false, alarms.get(id)?.enabled)
+        assertNull(sessions.current())
+        assertTrue(missed.isEmpty())
+    }
+
+    @Test
+    fun `each ringing stretch gets its own 30 minutes, and one that runs out ends the ring as missed`() = runTest {
+        val id = oneShot()
+        val controller = ringing(id)
+        advanceTimeBy(Duration.ofMinutes(25).toMillis())
+        clock.now = now.plus(Duration.ofMinutes(25))
+        controller.snooze()
+        val until = clock.now.plus(Duration.ofMinutes(5))
+
+        advanceTimeBy(Duration.ofMinutes(5).toMillis())
+        fireSnooze(controller, id)
+        assertEquals(until, controller.ringingState.startedAt)
+
+        // 59 minutes after the first ring, 29 into this stretch.
+        advanceTimeBy(Duration.ofMinutes(29).toMillis())
+        runCurrent()
+        assertTrue(controller.state.value is RingingState.Ringing)
+        assertTrue(missed.isEmpty())
+
+        clock.now = until.plus(RingLimits.MAX_RING)
+        advanceTimeBy(Duration.ofMinutes(1).toMillis() + 1)
+        runCurrent()
+
+        assertEquals(RingingState.Idle, controller.state.value)
+        assertEquals(listOf(MissedAlarm(id, "Work", deadline, MissedReason.RING_TIMED_OUT)), missed)
+        assertNull(ringState.currentRinging())
+        assertTrue(ringState.currentSnoozed().isEmpty())
+        assertEquals("the deadline has passed", false, alarms.get(id)?.enabled)
+    }
+
+    @Test
+    fun `a snooze ends the quiet period`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        val controller = ringing(id)
+        controller.startQuietPeriod()
+
+        controller.snooze()
+        assertEquals(RingCommand.Stop, controller.command.value)
+        fireSnooze(controller, id)
+
+        assertFalse(controller.isQuiet)
+        assertNull(controller.quietUntil)
+        controller.startQuietPeriod()
+        assertTrue(controller.isQuiet)
+    }
+
+    @Test
+    fun `a snoozed ring with barcodes is dismissed now only with one of them or the typed code`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        sessions.start(now.minusSeconds(8 * 3600))
+        val controller = ringing(id)
+        controller.snooze()
+
+        assertEquals(DismissResult.REJECTED, controller.dismissWithoutBarcode())
+        assertEquals(DismissResult.REJECTED, controller.dismissWithBarcode(ScannedCode(BarcodeFormat.QR_CODE, "mug")))
+        assertEquals(DismissResult.REJECTED, controller.dismissWithTypedCode(""))
+        val code = controller.newFallbackCode()
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithTypedCode(code))
+
+        assertEquals(RingingState.Idle, controller.state.value)
+        assertTrue(controller.snoozed.value.isEmpty())
+        assertTrue(ringState.currentSnoozed().isEmpty())
+        assertTrue(snoozeEntries.isEmpty())
+        assertTrue(snoozeNotifications.isEmpty())
+        assertEquals(false, alarms.get(id)?.enabled)
+        assertNull(sessions.current())
+        assertTrue(missed.isEmpty())
+
+        // An entry that was already on its way finds nothing to ring.
+        clock.now = now.plusSeconds(5 * 60)
+        controller.endSnooze(ringFor(id))
+        runCurrent()
+        assertEquals(RingingState.Idle, controller.state.value)
+        assertEquals(RingCommand.Stop, controller.command.value)
+        assertNull(ringState.currentRinging())
+        assertTrue(missed.isEmpty())
+    }
+
+    @Test
+    fun `a snoozed ring is dismissed now with a barcode it started with`() = runTest {
+        val id = oneShot()
+        val barcodeId = barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        val controller = ringing(id)
+        controller.snooze()
+        barcodes.delete(barcodeId)
+
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithBarcode(toothpaste))
+        assertEquals(RingingState.Idle, controller.state.value)
+    }
+
+    @Test
+    fun `a snoozed ring without barcodes is dismissed now with a plain tap`() = runTest {
+        val id = oneShot()
+        val controller = ringing(id)
+        controller.snooze()
+        assertEquals(false, (controller.state.value as RingingState.Snoozed).requiresBarcode)
+
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithoutBarcode())
+
+        assertEquals(RingingState.Idle, controller.state.value)
+        assertEquals(false, alarms.get(id)?.enabled)
+        assertEquals(DismissResult.NOT_RINGING, controller.dismissWithoutBarcode())
+    }
+
+    @Test
+    fun `other alarms ring while one is snoozed, and a snooze due meanwhile rings right after`() = runTest {
+        val first = oneShot("First")
+        val second = oneShot("Second")
+        val controller = ringing(first)
+        controller.snooze()
+        val until = now.plusSeconds(5 * 60)
+
+        clock.now = now.plusSeconds(60)
+        val secondRing = ScheduledRing(second, ringAt = clock.now, deadline = deadline)
+        assertTrue(controller.startRinging(secondRing))
+        runCurrent()
+        assertEquals(second, controller.ringingState.alarmId)
+        assertEquals(listOf(first), controller.snoozed.value.map { it.alarmId })
+
+        // The snooze of the first comes due during the second ring. It waits.
+        fireSnooze(controller, first)
+        assertEquals(second, controller.ringingState.alarmId)
+        assertEquals(listOf(ringFor(first), secondRing), serviceStarts)
+        assertTrue(missed.isEmpty())
+        assertEquals(listOf(first), ringState.currentSnoozed().map { it.alarmId })
+        assertEquals(until, ringState.currentSnoozed().single().snoozedUntil)
+
+        clock.now = until.plusSeconds(90)
+        controller.dismissWithoutBarcode()
+
+        // Its entry is set to fire at once, so it starts like any other ring.
+        assertEquals(ringFor(first) to clock.now, snoozeEntries[first])
+        assertEquals(first, (controller.state.value as RingingState.Snoozed).alarmId)
+        fireSnooze(controller, first)
+
+        assertEquals(first, controller.ringingState.alarmId)
+        assertEquals(clock.now, controller.ringingState.startedAt)
+        assertEquals(2, controller.ringingState.snoozesLeft)
+        assertTrue(missed.isEmpty())
+        assertEquals(true, alarms.get(first)?.enabled)
+    }
+
+    @Test
+    fun `two snoozed alarms show the one due first and each rings at its own time`() = runTest {
+        val first = oneShot("First")
+        val second = alarms.upsert(Alarm(time = LocalTime.of(7, 0), label = "Second", snoozeMinutes = 2))
+        val controller = ringing(first)
+        controller.snooze()
+        clock.now = now.plusSeconds(60)
+        controller.startRinging(ScheduledRing(second, ringAt = clock.now, deadline = deadline))
+        runCurrent()
+        controller.snooze()
+
+        assertEquals(listOf(second, first), controller.snoozed.value.map { it.alarmId })
+        assertEquals(second, (controller.state.value as RingingState.Snoozed).alarmId)
+        assertEquals(setOf(first, second), snoozeNotifications.keys)
+
+        fireSnooze(controller, second)
+        assertEquals(second, controller.ringingState.alarmId)
+        assertEquals(listOf(first), controller.snoozed.value.map { it.alarmId })
+        controller.dismissWithoutBarcode()
+        assertEquals(first, (controller.state.value as RingingState.Snoozed).alarmId)
+
+        fireSnooze(controller, first)
+        assertEquals(first, controller.ringingState.alarmId)
+    }
+
+    @Test
+    fun `a snooze survives a process death and rings at its time`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        ringing(id).snooze()
+        val record = ringState.currentSnoozed().single()
+        val until = record.snoozedUntil!!
+        // A reboot wipes the alarm clock entries and the notifications.
+        snoozeEntries.clear()
+        snoozeNotifications.clear()
+        clock.now = now.plusSeconds(60)
+
+        val controller = controller()
+        controller.recoverInterruptedRing()
+
+        assertEquals(ringFor(id) to until, snoozeEntries[id])
+        assertEquals(RingingState.Snoozed(id, "Work", deadline, until, snoozesLeft = 2, requiresBarcode = true), controller.state.value)
+        assertEquals(SnoozedAlarm(id, "Work", until), snoozeNotifications[id])
+        assertEquals(listOf(ringFor(id)), serviceStarts)
+        assertTrue(missed.isEmpty())
+
+        fireSnooze(controller, id)
+
+        assertEquals(until, controller.ringingState.startedAt)
+        assertEquals(2, controller.ringingState.snoozesLeft)
+        assertEquals(DismissResult.REJECTED, controller.dismissWithoutBarcode())
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithBarcode(toothpaste))
+    }
+
+    @Test
+    fun `a snooze whose time passed while the process was dead rings a few seconds after the start`() = runTest {
+        val id = oneShot()
+        ringing(id).snooze()
+        snoozeEntries.clear()
+        clock.now = now.plusSeconds(20 * 60)
+
+        val controller = controller()
+        controller.recoverInterruptedRing()
+
+        val (ring, at) = snoozeEntries.getValue(id)
+        assertEquals(ringFor(id), ring)
+        assertTrue(at > clock.now && at <= clock.now.plusSeconds(10))
+        assertTrue(missed.isEmpty())
+        fireSnooze(controller, id)
+        assertEquals(id, controller.ringingState.alarmId)
+    }
+
+    @Test
+    fun `a snooze more than 30 minutes overdue after a process death is reported as missed`() = runTest {
+        val id = oneShot()
+        ringing(id).snooze()
+        snoozeEntries.clear()
+        clock.now = now.plusSeconds(5 * 60).plus(RingLimits.MAX_RING).plusSeconds(1)
+
+        val controller = controller()
+        controller.recoverInterruptedRing()
+
+        assertEquals(listOf(MissedAlarm(id, "Work", deadline, MissedReason.RING_INTERRUPTED)), missed)
+        assertTrue(snoozeEntries.isEmpty())
+        assertTrue(ringState.currentSnoozed().isEmpty())
+        assertTrue(snoozeNotifications.isEmpty())
+        assertEquals(RingingState.Idle, controller.state.value)
+        assertEquals("its deadline has passed", false, alarms.get(id)?.enabled)
+    }
+
+    @Test
+    fun `a snooze whose entry cannot be set again after a reboot is reported, and stays owed while its deadline is ahead`() = runTest {
+        val id = oneShot()
+        ringState.markFired(id, deadline)
+        ringing(id).snooze()
+        snoozeEntries.clear()
+        snoozeEntriesRefused = true
+
+        val controller = controller()
+        controller.recoverInterruptedRing()
+
+        assertEquals(MissedReason.RING_INTERRUPTED, missed.single().reason)
+        assertTrue(ringState.currentSnoozed().isEmpty())
+        assertEquals(true, alarms.get(id)?.enabled)
+        assertTrue("the deadline rings", ringState.lastFired().isEmpty())
+    }
+
+    @Test
+    fun `the test alarm snoozes with the defaults and its dismissal leaves the session alone`() = runTest {
+        sessions.start(now.minusSeconds(3600))
+        val controller = ringing(AlarmBroadcast.TEST_ALARM_ID)
+        assertEquals(Alarm.DEFAULT_SNOOZE_MINUTES, controller.ringingState.snoozeMinutes)
+        assertEquals(Alarm.DEFAULT_SNOOZE_LIMIT, controller.ringingState.snoozesLeft)
+
+        assertEquals(SnoozeResult.SNOOZED, controller.snooze())
+        assertEquals(SnoozedAlarm(AlarmBroadcast.TEST_ALARM_ID, "Test alarm", now.plusSeconds(5 * 60)), snoozeNotifications.values.single())
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithoutBarcode())
+
+        assertEquals(now.minusSeconds(3600), sessions.current()?.startedAt)
+        assertEquals(RingingState.Idle, controller.state.value)
+    }
+}

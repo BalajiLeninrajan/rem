@@ -10,8 +10,8 @@ import dev.balaji.rem.di.appContainer
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Receives [AlarmBroadcast.ACTION_FIRE] and [AlarmBroadcast.ACTION_RESUME] from
- * AlarmManager. Runs before the first unlock.
+ * Receives [AlarmBroadcast.ACTION_FIRE], [AlarmBroadcast.ACTION_RESUME] and
+ * [AlarmBroadcast.ACTION_SNOOZE_END] from AlarmManager. Runs before the first unlock.
  *
  * The ring starts inside `onReceive`, while AlarmManager still holds its wake lock and the
  * alarm clock exemption for starting a foreground service applies. The bookkeeping follows
@@ -24,6 +24,8 @@ class AlarmReceiver : BroadcastReceiver() {
         when (intent.action) {
             AlarmBroadcast.ACTION_FIRE -> fire(container, ring)
             AlarmBroadcast.ACTION_RESUME -> container.ringController.resumeRinging(ring)
+            // The occurrence was marked fired when it first rang, and the scheduler leaves snoozed rings alone.
+            AlarmBroadcast.ACTION_SNOOZE_END -> container.ringController.endSnooze(ring)
         }
     }
 

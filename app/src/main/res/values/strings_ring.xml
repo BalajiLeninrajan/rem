@@ -4,11 +4,14 @@
     <string name="ring_channel_ringing_description">Shows the alarm that is ringing and opens it over the lock screen.</string>
     <string name="ring_channel_missed_name">Missed alarms</string>
     <string name="ring_channel_missed_description">Tells you when an alarm did not ring or was not stopped.</string>
+    <string name="ring_channel_snoozed_name">Snoozed alarms</string>
+    <string name="ring_channel_snoozed_description">Shows a snoozed alarm and when it rings again.</string>
 
     <string name="ring_default_label">Alarm</string>
     <string name="ring_test_alarm_label">Test alarm</string>
     <string name="ring_notification_text">Ringing. Open to stop it.</string>
     <string name="ring_action_scan">Scan to dismiss</string>
+    <string name="ring_snoozed_notification_text">Snoozed until %1$s. Tap to dismiss it now.</string>
 
     <string name="ring_missed_title">Missed alarm</string>
     <string name="ring_missed_title_labelled">Missed alarm: %1$s</string>

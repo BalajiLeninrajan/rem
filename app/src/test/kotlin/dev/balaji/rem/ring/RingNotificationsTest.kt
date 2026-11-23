@@ -62,6 +62,28 @@ class RingNotificationsTest {
     }
 
     @Test
+    fun `a snoozed alarm has an ongoing quiet notification per alarm that opens the ringing screen`() {
+        notifications.ensureChannels()
+        val snoozed = SnoozedAlarm(7, "Work", Instant.parse("2026-01-15T06:50:00Z"))
+
+        notifications.notifySnoozed(snoozed)
+        notifications.notifySnoozed(snoozed.copy(alarmId = 8, label = ""))
+
+        assertEquals(NotificationManager.IMPORTANCE_LOW, manager.getNotificationChannel(RingContract.CHANNEL_SNOOZED).importance)
+        val notification = shadowOf(manager).getNotification("7", RingContract.NOTIFICATION_ID_SNOOZED)
+        assertEquals(RingContract.CHANNEL_SNOOZED, notification.channelId)
+        assertEquals("Work", notification.extras.getString(Notification.EXTRA_TITLE))
+        assertTrue(notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString().startsWith("Snoozed until "))
+        assertTrue(notification.flags and Notification.FLAG_ONGOING_EVENT != 0)
+        assertEquals(RingingActivity::class.java.name, shadowOf(notification.contentIntent).savedIntent.component?.className)
+        assertEquals(2, shadowOf(manager).allNotifications.size)
+
+        notifications.cancelSnoozed(7)
+        assertNull(shadowOf(manager).getNotification("7", RingContract.NOTIFICATION_ID_SNOOZED))
+        assertEquals(1, shadowOf(manager).allNotifications.size)
+    }
+
+    @Test
     fun `a missed alarm notification opens the reliability screen and is posted once per alarm`() {
         notifications.ensureChannels()
         val missed = MissedAlarm(7, "Work", Instant.parse("2026-01-15T07:00:00Z"), MissedReason.RING_TIMED_OUT)

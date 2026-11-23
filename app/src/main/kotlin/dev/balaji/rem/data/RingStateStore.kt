@@ -7,12 +7,17 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * "Alarm X has been ringing since T for deadline D." Written when a ring starts, cleared when it ends.
+ * A snoozed ring keeps its record in [RingStateStore.snoozed] until it rings again or is dismissed.
  *
+ * @property startedAt when the current ringing stretch started: the first ring, or the
+ *   ring again after a snooze. The 30 minute limit counts from here.
  * @property requiresBarcode what the ring decided when it started. A ring that is picked
  *   up again after a process death keeps this, whatever was deleted in the meantime.
  * @property barcodes the barcodes registered on the alarm when the ring started. A ring
  *   picked up again still takes them after the alarm lost them, for example because the
  *   alarm was deleted, which deletes its barcodes too.
+ * @property snoozes how many times this ring has been snoozed so far.
+ * @property snoozedUntil when a snoozed ring rings again. Null for the ring in progress.
  */
 data class RingingRecord(
     val alarmId: Long,
@@ -21,12 +26,15 @@ data class RingingRecord(
     val deadline: Instant,
     val requiresBarcode: Boolean = true,
     val barcodes: List<BarcodeKey> = emptyList(),
+    val snoozes: Int = 0,
+    val snoozedUntil: Instant? = null,
 )
 
 /**
- * Small persisted bookkeeping around rings, in device-protected storage. It answers three
- * questions after a process death or a reboot: was an alarm ringing, which occurrences
- * already fired, and what did the scheduler last hand to AlarmManager.
+ * Small persisted bookkeeping around rings, in device-protected storage. It answers four
+ * questions after a process death or a reboot: was an alarm ringing, which rings are
+ * snoozed, which occurrences already fired, and what did the scheduler last hand to
+ * AlarmManager.
  *
  * Instants are stored with millisecond precision.
  */
@@ -36,7 +44,10 @@ interface RingStateStore {
 
     suspend fun currentRinging(): RingingRecord?
 
-    /** Replaces any existing record. */
+    /**
+     * Replaces any existing record, and drops the snoozed record of the same alarm in the
+     * same write: that ring goes on as this one. [RingingRecord.snoozedUntil] is not stored.
+     */
     suspend fun setRinging(record: RingingRecord)
 
     /**
@@ -44,6 +55,20 @@ interface RingStateStore {
      * it did. This keeps a late cleanup of an old ring from erasing a newer one.
      */
     suspend fun clearRinging(expected: RingingRecord): Boolean
+
+    /** Rings that are snoozed, at most one per alarm, each with its [RingingRecord.snoozedUntil]. */
+    val snoozed: Flow<List<RingingRecord>>
+
+    suspend fun currentSnoozed(): List<RingingRecord>
+
+    /**
+     * Moves a ring to the snoozed rings in one write. [snoozed] replaces a snoozed record of
+     * the same alarm, and the ringing record is cleared if it still equals [ringing].
+     */
+    suspend fun snooze(ringing: RingingRecord, snoozed: RingingRecord)
+
+    /** Removes [expected] from the snoozed rings if it is there, atomically, and says whether it did. */
+    suspend fun clearSnoozed(expected: RingingRecord): Boolean
 
     /**
      * Alarm id to the deadline of the latest occurrence that fired. The scheduler passes
