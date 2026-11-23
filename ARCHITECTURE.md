@@ -82,7 +82,7 @@ A ring that was cut off comes back, for as long as its 30 minutes have not run o
 - `recoverInterruptedRing` on process start. It waits 2 seconds, and if the record is still not live it sets the watchdog entry 5 seconds ahead. This is what happens after a reboot, which wipes every alarm clock entry. Nothing on the boot path starts the service itself, because audio started there is muted. Whether audio from an alarm clock entry that fires seconds after boot is allowed has not been checked on a device.
 - The service returns `START_REDELIVER_INTENT`, and a redelivered or retried start resumes the ring too. The system delays that restart, often by minutes, so the watchdog usually comes first.
 
-A resumed ring does not ask whether its alarm is still enabled, and it keeps the barcode rule stored in its record. Switching the alarm off or deleting the barcodes in the app and then killing the process does not silence it.
+A resumed ring does not ask whether its alarm is still enabled, and it keeps the barcode rule stored in its record. The record also lists the barcodes the ring started with, and a resumed ring takes those as well as the ones on its alarm now. Switching the alarm off, deleting its barcodes or deleting the alarm in the app and then killing the process does not silence it, and the scanner still works.
 
 - A record whose 30 minutes ran out, or whose watchdog entry cannot be set, is cleared and reported as a missed alarm. If its deadline is still ahead, the fired record is removed and a one-shot alarm stays on, so it rings at the deadline.
 - A persisted ring whose deadline passed without a fired record is reported as missed by `rescheduleAll`.

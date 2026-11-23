@@ -1,5 +1,6 @@
 package dev.balaji.rem.data
 
+import dev.balaji.rem.core.BarcodeKey
 import dev.balaji.rem.core.ScheduledRing
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -9,6 +10,9 @@ import kotlinx.coroutines.flow.Flow
  *
  * @property requiresBarcode what the ring decided when it started. A ring that is picked
  *   up again after a process death keeps this, whatever was deleted in the meantime.
+ * @property barcodes the barcodes registered on the alarm when the ring started. A ring
+ *   picked up again still takes them after the alarm lost them, for example because the
+ *   alarm was deleted, which deletes its barcodes too.
  */
 data class RingingRecord(
     val alarmId: Long,
@@ -16,6 +20,7 @@ data class RingingRecord(
     val ringAt: Instant,
     val deadline: Instant,
     val requiresBarcode: Boolean = true,
+    val barcodes: List<BarcodeKey> = emptyList(),
 )
 
 /**

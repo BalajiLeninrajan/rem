@@ -146,7 +146,7 @@ class DefaultRingControllerTest {
 
         val controller = ringing(id)
 
-        assertEquals(RingingRecord(id, now, now, deadline), ringState.currentRinging())
+        assertEquals(RingingRecord(id, now, now, deadline, barcodes = listOf(toothpaste.normalised())), ringState.currentRinging())
         assertEquals(RingingState.Ringing(id, "Work", now, deadline, requiresBarcode = true), controller.state.value)
         val spec = (controller.command.value as RingCommand.Play).spec
         assertEquals(
@@ -627,6 +627,27 @@ class DefaultRingControllerTest {
     }
 
     @Test
+    fun `a resumed ring whose alarm was deleted still takes the barcodes it started with`() = runTest {
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        ringing(id)
+        val record = ringState.currentRinging()!!
+        assertEquals(listOf(toothpaste.normalised()), record.barcodes)
+
+        // The process dies, and the alarm is deleted with its barcodes before the ring comes back.
+        alarms.delete(id)
+        assertTrue(barcodes.all(id).isEmpty())
+        val controller = controller()
+        controller.resumeRinging(ScheduledRing(id, record.ringAt, deadline))
+        runCurrent()
+
+        assertTrue(controller.command.value is RingCommand.Play)
+        assertEquals(DismissResult.REJECTED, controller.dismissWithoutBarcode())
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithBarcode(toothpaste))
+        assertNull(ringState.currentRinging())
+    }
+
+    @Test
     fun `barcodes that cannot be read at ring start are read again`() = runTest {
         val id = oneShot()
         barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
@@ -724,7 +745,7 @@ class DefaultRingControllerTest {
         assertEquals(loud.copy(quiet = true), controller.command.value)
         assertEquals(now.plus(RingLimits.QUIET_PERIOD), controller.quietUntil)
         assertEquals(true, (controller.state.value as RingingState.Ringing).requiresBarcode)
-        assertEquals(RingingRecord(id, now, now, deadline), ringState.currentRinging())
+        assertEquals(RingingRecord(id, now, now, deadline, barcodes = listOf(toothpaste.normalised())), ringState.currentRinging())
         assertEquals(ringFor(id), watchdogEntry?.first)
     }
 

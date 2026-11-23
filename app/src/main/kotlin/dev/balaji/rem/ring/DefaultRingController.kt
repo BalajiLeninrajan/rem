@@ -2,6 +2,7 @@ package dev.balaji.rem.ring
 
 import dev.balaji.rem.core.Alarm
 import dev.balaji.rem.core.Barcode
+import dev.balaji.rem.core.BarcodeKey
 import dev.balaji.rem.core.FallbackCode
 import dev.balaji.rem.core.RemSettings
 import dev.balaji.rem.core.RingLimits
@@ -41,8 +42,10 @@ import kotlinx.coroutines.withTimeout
  *
  * The barcodes that can dismiss a ring are the ones registered on its alarm when it
  * started. Deleting them all from the main app during a ring does not unlock the plain
- * dismiss button, and a ring picked up again after a process death keeps what its record
- * says about that. The test alarm has no stored alarm and needs no barcode.
+ * dismiss button. A ring picked up again after a process death keeps what its record says
+ * about that, and takes the barcodes its record lists as well as the ones on its alarm
+ * now, so deleting the alarm during the ring leaves the scanner working. The test alarm
+ * has no stored alarm and needs no barcode.
  *
  * A ring that ends without a dismissal while its deadline is still ahead stays owed: its
  * fired record is removed and a one-shot alarm stays on, so the next reschedule plans the
@@ -79,9 +82,13 @@ internal class DefaultRingController(
         @Volatile
         var label: String = ""
 
-        /** The barcodes registered on the alarm when the ring started. Null until they are loaded. */
+        /** The barcodes this ring takes. Null until they are loaded. */
         @Volatile
         var registered: List<Barcode>? = null
+
+        /** What the persisted record lists as the barcodes of the ring's start. */
+        @Volatile
+        var recordedBarcodes: List<BarcodeKey> = emptyList()
 
         /** False only when the ring started with no barcode on its alarm. Then the plain button works. */
         @Volatile
@@ -118,6 +125,7 @@ internal class DefaultRingController(
             ringAt = ring.ringAt.truncatedTo(ChronoUnit.MILLIS),
             deadline = ring.deadline.truncatedTo(ChronoUnit.MILLIS),
             requiresBarcode = requiresBarcode,
+            barcodes = recordedBarcodes,
         )
     }
 
@@ -338,6 +346,7 @@ internal class DefaultRingController(
         if (!mine.isTest && !mine.resumed && alarm?.enabled != true) return null
         val registered = if (mine.isTest) emptyList() else loadBarcodes(id)
         mine.registered = registered.orEmpty()
+        mine.recordedBarcodes = registered.orEmpty().map { it.key }
         mine.requiresBarcode = registered == null || registered.isNotEmpty()
         if (!adoptRecord(mine)) return null
         mine.label = labelOf(id, alarm)
@@ -386,8 +395,9 @@ internal class DefaultRingController(
 
     /**
      * Makes the persisted record describe [mine]. A new ring writes its record. A resumed
-     * ring keeps the start time and the barcode rule of the record it continues, and is dropped when that
-     * record is gone, because then the ring already ended or was reported as missed.
+     * ring keeps the start time and the barcode rule of the record it continues, also takes
+     * the barcodes that record lists, and is dropped when that record is gone, because then
+     * the ring already ended or was reported as missed.
      */
     private suspend fun adoptRecord(mine: Live): Boolean {
         if (!mine.resumed) {
@@ -397,6 +407,9 @@ internal class DefaultRingController(
         val record = loadOr(null) { ringState.currentRinging() }?.takeIf { isLive(it) } ?: return false
         mine.startedAt = record.startedAt
         mine.requiresBarcode = record.requiresBarcode
+        mine.recordedBarcodes = record.barcodes
+        val started = record.barcodes.map { Barcode(label = "", format = it.format, value = it.value) }
+        mine.registered = (mine.registered.orEmpty() + started).distinctBy { it.key }
         return true
     }
 
