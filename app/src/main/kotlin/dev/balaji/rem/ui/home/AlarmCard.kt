@@ -5,14 +5,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MoreTime
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -22,6 +26,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,7 +57,8 @@ import java.time.ZoneOffset
 
 /**
  * One alarm: the deadline large, label and repeat days, the computed ring time, a warning
- * when it is on without a barcode, the switch and a menu to duplicate or delete it.
+ * when it is on without a barcode, the switch and a menu to duplicate or delete it. During
+ * a sleep session it offers the ring's late option, or the way back to the alarm time.
  */
 @Composable
 fun AlarmCard(
@@ -63,6 +69,7 @@ fun AlarmCard(
     onEnabledChange: (Boolean) -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
+    onLateChange: (accept: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val alarm = row.alarm
@@ -92,6 +99,29 @@ fun AlarmCard(
                     color = if (alarm.enabled) colors.primary else colors.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+                val late = row.late
+                val ring = row.nextRing
+                if (late != null && ring != null) {
+                    TextButton(
+                        onClick = { onLateChange(!late.accepted) },
+                        contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
+                        modifier = Modifier.offset(x = (-12).dp),
+                    ) {
+                        Icon(
+                            imageVector = if (late.accepted) Icons.AutoMirrored.Filled.Undo else Icons.Filled.MoreTime,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (late.accepted) {
+                                stringResource(R.string.ui_home_late_revoke, clockText(ring.deadline, zone))
+                            } else {
+                                stringResource(R.string.ui_home_late_offer, clockText(late.option.ringAt, zone))
+                            },
+                        )
+                    }
+                }
                 if (alarm.enabled && row.noBarcode) {
                     Row(modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -188,6 +218,7 @@ private fun AlarmCardPreview() {
             onEnabledChange = {},
             onDuplicate = {},
             onDelete = {},
+            onLateChange = {},
         )
     }
 }

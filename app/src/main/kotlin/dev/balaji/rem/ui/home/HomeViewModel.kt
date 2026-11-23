@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.balaji.rem.core.Alarm
 import dev.balaji.rem.core.Barcode
+import dev.balaji.rem.core.LateOffer
 import dev.balaji.rem.core.PlannedRing
 import dev.balaji.rem.core.RemSettings
 import dev.balaji.rem.core.SchedulePlan
 import dev.balaji.rem.core.SleepSession
+import dev.balaji.rem.core.WakeExplanation
 import dev.balaji.rem.core.computeWakeTime
 import dev.balaji.rem.data.AlarmRepository
 import dev.balaji.rem.data.BarcodeRepository
@@ -27,15 +29,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class HomeViewModel(
     private val alarms: AlarmRepository,
     private val barcodes: BarcodeRepository,
-    settings: SettingsRepository,
+    private val settings: SettingsRepository,
     private val sessions: SleepSessionRepository,
-    scheduler: AlarmScheduler,
+    private val scheduler: AlarmScheduler,
     ringController: RingController,
     private val clock: Clock,
 ) : ViewModel() {
@@ -43,6 +47,7 @@ class HomeViewModel(
     private val system = MutableStateFlow(SystemChecks())
     private val recentlyDeleted = MutableStateFlow<Alarm?>(null)
     private val onboardingOpened = MutableStateFlow(false)
+    private val latePrompt = MutableStateFlow<PendingLatePrompt?>(null)
     private var undoExpiry: Job? = null
 
     /** The barcodes the alarm in [recentlyDeleted] had. Deleting an alarm deletes them, so undo puts them back. */
@@ -63,7 +68,9 @@ class HomeViewModel(
         Live(plan, (ringing as? RingingState.Ringing)?.alarmId, instant, checks)
     }
 
-    private val local = combine(recentlyDeleted, onboardingOpened) { deleted, opened -> Local(deleted, opened) }
+    private val local = combine(recentlyDeleted, onboardingOpened, latePrompt) { deleted, opened, prompt ->
+        Local(deleted, opened, prompt)
+    }
 
     val state: StateFlow<HomeUiState> = combine(stored, live, local) { s, l, o -> buildState(s, l, o) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState())
@@ -107,12 +114,61 @@ class HomeViewModel(
         recentlyDeleted.compareAndSet(alarm, null)
     }
 
+    /**
+     * Starts the session, then asks about the late options it gives, if any. The offers come
+     * from the plan as it was before the session, which has the deadlines the session covers
+     * and leaves out occurrences that already fired.
+     */
     fun goToSleep() {
-        viewModelScope.launch { sessions.start(clock.instant()) }
+        val startedAt = clock.instant()
+        val before = scheduler.plan.value
+        latePrompt.value = null
+        viewModelScope.launch {
+            val session = sessions.start(startedAt)
+            val offers = before.lateOffers(session, settings.current())
+            if (offers.isNotEmpty()) latePrompt.value = PendingLatePrompt(session.startedAt, offers, emptySet())
+        }
     }
 
     fun endSleep() {
+        latePrompt.value = null
         viewModelScope.launch { sessions.end() }
+    }
+
+    /** Ticks or unticks one row of the prompt. Stored only by [confirmLatePrompt]. */
+    fun setLateChoice(alarmId: Long, accept: Boolean) {
+        latePrompt.update { prompt ->
+            if (prompt == null || prompt.offers.none { it.alarmId == alarmId }) {
+                prompt
+            } else {
+                prompt.copy(accepted = if (accept) prompt.accepted + alarmId else prompt.accepted - alarmId)
+            }
+        }
+    }
+
+    /** Accepts the ticked rows in the session the prompt was made for. A session started or ended since gets nothing. */
+    fun confirmLatePrompt() {
+        val prompt = latePrompt.getAndUpdate { null } ?: return
+        if (prompt.accepted.isEmpty()) return
+        viewModelScope.launch {
+            if (sessions.current()?.startedAt != prompt.startedAt) return@launch
+            prompt.accepted.forEach { sessions.acceptLate(it) }
+        }
+    }
+
+    /** Closes the prompt and keeps every alarm time. */
+    fun dismissLatePrompt() {
+        latePrompt.value = null
+    }
+
+    /** The card's "ring at ... instead". */
+    fun acceptLate(alarmId: Long) {
+        viewModelScope.launch { sessions.acceptLate(alarmId) }
+    }
+
+    /** The card's way back to the alarm time. */
+    fun revokeLate(alarmId: Long) {
+        viewModelScope.launch { sessions.revokeLate(alarmId) }
     }
 
     /** Onboarding is offered once per run of the screen, so leaving it early does not loop back into it. */
@@ -125,11 +181,14 @@ class HomeViewModel(
         return HomeUiState(
             loading = false,
             alarms = stored.alarms.map { alarm ->
+                val nextRing = if (alarm.enabled) live.plan.forAlarm(alarm.id) else null
+                val ringing = alarm.id == live.ringingAlarmId
                 AlarmRow(
                     alarm = alarm,
-                    nextRing = if (alarm.enabled) live.plan.forAlarm(alarm.id) else null,
-                    ringing = alarm.id == live.ringingAlarmId,
+                    nextRing = nextRing,
+                    ringing = ringing,
                     noBarcode = stored.barcodes[alarm.id].isNullOrEmpty(),
+                    late = if (ringing) null else nextRing?.lateSwitch(session),
                 )
             },
             sleep = when {
@@ -141,6 +200,7 @@ class HomeViewModel(
             reliabilityProblems = reliabilityProblemCount(live.system, barcodeCoverage(stored.alarms, stored.barcodes)),
             onboardingNeeded = !stored.onboardingDone && !local.onboardingOpened,
             recentlyDeleted = local.recentlyDeleted,
+            latePrompt = local.latePrompt?.takeIf { it.startedAt == session?.startedAt }?.toUi(stored.alarms),
             now = live.now,
             zone = clock.zone,
         )
@@ -156,7 +216,20 @@ class HomeViewModel(
 
     private data class Live(val plan: SchedulePlan, val ringingAlarmId: Long?, val now: Instant, val system: SystemChecks)
 
-    private data class Local(val recentlyDeleted: Alarm?, val onboardingOpened: Boolean)
+    private data class Local(val recentlyDeleted: Alarm?, val onboardingOpened: Boolean, val latePrompt: PendingLatePrompt?)
+
+    /** The prompt for the session started at [startedAt], with the alarm ids ticked so far. */
+    private data class PendingLatePrompt(val startedAt: Instant, val offers: List<LateOffer>, val accepted: Set<Long>) {
+        /** Alarms deleted or switched off since the prompt opened are left out. */
+        fun toUi(alarms: List<Alarm>): LatePrompt? {
+            val byId = alarms.filter { it.enabled }.associateBy { it.id }
+            val rows = offers.mapNotNull { offer ->
+                val alarm = byId[offer.alarmId] ?: return@mapNotNull null
+                LatePromptRow(offer.alarmId, alarm.label, offer.deadline, offer.option, offer.alarmId in accepted)
+            }
+            return if (rows.isEmpty()) null else LatePrompt(rows)
+        }
+    }
 
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
@@ -166,13 +239,24 @@ class HomeViewModel(
     }
 }
 
+/**
+ * The card's late switch for this ring, while [session] covers it. A ring that uses its late
+ * option has a [WakeExplanation.LateCycles] explanation.
+ */
+private fun PlannedRing.lateSwitch(session: SleepSession?): LateSwitch? {
+    val option = late ?: return null
+    if (session == null || !session.covers(deadline)) return null
+    return LateSwitch(option, accepted = explanation is WakeExplanation.LateCycles)
+}
+
 private fun SchedulePlan.firstCoveredBy(session: SleepSession): PlannedRing? =
     rings.filter { session.covers(it.deadline) }.minByOrNull { it.ringAt }
 
 /**
  * The first ring if a session started at [now]. It reuses the deadlines of the current plan,
- * which already skip occurrences that have fired. A late ring whose deadline has passed is
- * not covered by a new session, which accepts no late option, so it would ring at once.
+ * which already skip occurrences that have fired. Its `late` is the option the prompt after
+ * "going to sleep" would offer for it. A late ring whose deadline has passed is not covered
+ * by a new session, which accepts no late option, so it would ring at once.
  */
 internal fun sleepNowPreview(plan: SchedulePlan, settings: RemSettings, now: Instant): PlannedRing? {
     val session = SleepSession(now)

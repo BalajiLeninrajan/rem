@@ -4,6 +4,7 @@ import dev.balaji.rem.core.Alarm
 import dev.balaji.rem.core.Barcode
 import dev.balaji.rem.core.BarcodeFormat
 import dev.balaji.rem.core.DeadlineReason
+import dev.balaji.rem.core.LateOption
 import dev.balaji.rem.core.PlannedRing
 import dev.balaji.rem.core.RemSettings
 import dev.balaji.rem.core.SchedulePlan
@@ -348,5 +349,200 @@ class HomeViewModelTest {
 
         assertEquals(PlannedRing(7, now, deadline, WakeExplanation.AtDeadline(DeadlineReason.OUTSIDE_SESSION)), preview)
     }
-}
 
+    // Session at 23:00, sleep onset 23:15, cycles end at 05:15 and 06:45. For 06:30 the 05:15
+    // boundary is 75 minutes early, outside the 30 minute window, and 06:45 is 15 minutes late.
+    private val lateOption = LateOption(at("2026-01-15T06:45"), cycles = 5, minutesAfterDeadline = 15)
+
+    @Test
+    fun `going to sleep asks about each alarm that can ring a cycle late, and nothing is accepted by default`() = runTest {
+        val viewModel = viewModel()
+        val late = alarms.upsert(Alarm(time = LocalTime.of(6, 30), label = "Gym"))
+        alarms.upsert(Alarm(time = LocalTime.of(7, 0)))
+        replan()
+
+        viewModel.goToSleep()
+        advanceUntilIdle()
+
+        assertEquals(clock.instant(), sessions.current()?.startedAt)
+        val prompt = viewModel.state.value.latePrompt!!
+        assertEquals(listOf(LatePromptRow(late, "Gym", at("2026-01-15T06:30"), lateOption, accepted = false)), prompt.rows)
+
+        viewModel.confirmLatePrompt()
+        replan()
+
+        assertNull(viewModel.state.value.latePrompt)
+        assertEquals(emptySet<Long>(), sessions.current()?.acceptedLate)
+        val ring = viewModel.state.value.alarms.first { it.alarm.id == late }.nextRing!!
+        assertEquals(at("2026-01-15T06:30"), ring.ringAt)
+        assertEquals(WakeExplanation.AtDeadline(DeadlineReason.NO_CYCLE_IN_WINDOW), ring.explanation)
+    }
+
+    @Test
+    fun `accepting in the prompt moves the ring to the late cycle for this session`() = runTest {
+        val viewModel = viewModel()
+        val first = alarms.upsert(Alarm(time = LocalTime.of(6, 30)))
+        // For 08:00 the 06:45 boundary is 75 minutes early, and 08:15 is 15 minutes late.
+        val second = alarms.upsert(Alarm(time = LocalTime.of(8, 0)))
+        replan()
+
+        viewModel.goToSleep()
+        advanceUntilIdle()
+        assertEquals(listOf(first, second), viewModel.state.value.latePrompt!!.rows.map { it.alarmId })
+
+        viewModel.setLateChoice(first, true)
+        viewModel.setLateChoice(second, true)
+        viewModel.setLateChoice(second, false)
+        assertEquals(listOf(true, false), viewModel.state.value.latePrompt!!.rows.map { it.accepted })
+        viewModel.confirmLatePrompt()
+        replan()
+
+        assertEquals(setOf(first), sessions.current()?.acceptedLate)
+        val state = viewModel.state.value
+        val ring = state.alarms.first { it.alarm.id == first }.nextRing!!
+        assertEquals(at("2026-01-15T06:45"), ring.ringAt)
+        assertEquals(WakeExplanation.LateCycles(cycles = 5, minutesAfterDeadline = 15), ring.explanation)
+        assertEquals(ring, (state.sleep as SleepState.Active).tonight)
+        assertEquals(LateSwitch(lateOption, accepted = true), state.alarms.first { it.alarm.id == first }.late)
+        assertEquals(false, state.alarms.first { it.alarm.id == second }.late?.accepted)
+    }
+
+    @Test
+    fun `keeping the alarm times closes the prompt and accepts nothing`() = runTest {
+        val viewModel = viewModel()
+        val id = alarms.upsert(Alarm(time = LocalTime.of(6, 30)))
+        replan()
+
+        viewModel.goToSleep()
+        advanceUntilIdle()
+        viewModel.setLateChoice(id, true)
+        viewModel.dismissLatePrompt()
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.latePrompt)
+        assertEquals(emptySet<Long>(), sessions.current()?.acceptedLate)
+    }
+
+    @Test
+    fun `no prompt when every alarm has a cycle that fits`() = runTest {
+        val viewModel = viewModel()
+        alarms.upsert(Alarm(time = LocalTime.of(7, 0)))
+        replan()
+
+        viewModel.goToSleep()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.sleep is SleepState.Active)
+        assertNull(viewModel.state.value.latePrompt)
+    }
+
+    @Test
+    fun `a prompt answered after its session ended accepts nothing in the next one`() = runTest {
+        val viewModel = viewModel()
+        val id = alarms.upsert(Alarm(time = LocalTime.of(6, 30)))
+        replan()
+
+        viewModel.goToSleep()
+        advanceUntilIdle()
+        viewModel.setLateChoice(id, true)
+        sessions.start(clock.instant().plusSeconds(60))
+        advanceUntilIdle()
+        assertNull(viewModel.state.value.latePrompt)
+
+        viewModel.confirmLatePrompt()
+        advanceUntilIdle()
+
+        assertEquals(emptySet<Long>(), sessions.current()?.acceptedLate)
+    }
+
+    @Test
+    fun `I'm up closes the prompt`() = runTest {
+        val viewModel = viewModel()
+        alarms.upsert(Alarm(time = LocalTime.of(6, 30)))
+        replan()
+
+        viewModel.goToSleep()
+        advanceUntilIdle()
+        viewModel.endSleep()
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.latePrompt)
+        assertNull(sessions.current())
+    }
+
+    @Test
+    fun `an alarm switched off while the prompt is open drops out of it`() = runTest {
+        val viewModel = viewModel()
+        val first = alarms.upsert(Alarm(time = LocalTime.of(6, 30)))
+        val second = alarms.upsert(Alarm(time = LocalTime.of(8, 0)))
+        replan()
+
+        viewModel.goToSleep()
+        advanceUntilIdle()
+        viewModel.setEnabled(first, false)
+        advanceUntilIdle()
+        assertEquals(listOf(second), viewModel.state.value.latePrompt!!.rows.map { it.alarmId })
+
+        viewModel.setEnabled(second, false)
+        advanceUntilIdle()
+        assertNull(viewModel.state.value.latePrompt)
+    }
+
+    @Test
+    fun `during a session the card offers the late cycle and the way back`() = runTest {
+        val viewModel = viewModel()
+        val id = alarms.upsert(Alarm(time = LocalTime.of(6, 30)))
+        replan()
+        assertNull(viewModel.state.value.alarms.single().late)
+
+        sessions.start(clock.instant())
+        replan()
+        assertEquals(LateSwitch(lateOption, accepted = false), viewModel.state.value.alarms.single().late)
+
+        viewModel.acceptLate(id)
+        replan()
+        val accepted = viewModel.state.value.alarms.single()
+        assertEquals(LateSwitch(lateOption, accepted = true), accepted.late)
+        assertEquals(at("2026-01-15T06:45"), accepted.nextRing?.ringAt)
+
+        viewModel.revokeLate(id)
+        replan()
+        val back = viewModel.state.value.alarms.single()
+        assertEquals(LateSwitch(lateOption, accepted = false), back.late)
+        assertEquals(at("2026-01-15T06:30"), back.nextRing?.ringAt)
+        assertEquals(emptySet<Long>(), sessions.current()?.acceptedLate)
+    }
+
+    @Test
+    fun `the card offers nothing for a ring that has a cycle in the window or is ringing`() = runTest {
+        val viewModel = viewModel()
+        alarms.upsert(Alarm(time = LocalTime.of(7, 0)))
+        val ringing = alarms.upsert(Alarm(time = LocalTime.of(6, 30)))
+        sessions.start(clock.instant())
+        replan()
+        ringController.state.value = RingingState.Ringing(
+            alarmId = ringing,
+            label = "",
+            startedAt = clock.instant(),
+            deadline = at("2026-01-15T06:30"),
+            requiresBarcode = false,
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf(null, null), viewModel.state.value.alarms.map { it.late })
+    }
+
+    @Test
+    fun `the sleep-now preview names the late option`() = runTest {
+        val viewModel = viewModel()
+        val id = alarms.upsert(Alarm(time = LocalTime.of(6, 30)))
+        replan()
+
+        val preview = (viewModel.state.value.sleep as SleepState.Ready).preview!!
+
+        assertEquals(id, preview.alarmId)
+        assertEquals(at("2026-01-15T06:30"), preview.ringAt)
+        assertEquals(WakeExplanation.AtDeadline(DeadlineReason.NO_CYCLE_IN_WINDOW), preview.explanation)
+        assertEquals(lateOption, preview.late)
+    }
+}

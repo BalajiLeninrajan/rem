@@ -128,6 +128,10 @@ fun HomeScreen(
         onDeleteAlarm = viewModel::delete,
         onGoToSleep = viewModel::goToSleep,
         onEndSleep = viewModel::endSleep,
+        onLateChange = { alarmId, accept -> if (accept) viewModel.acceptLate(alarmId) else viewModel.revokeLate(alarmId) },
+        onLateChoice = viewModel::setLateChoice,
+        onConfirmLatePrompt = viewModel::confirmLatePrompt,
+        onDismissLatePrompt = viewModel::dismissLatePrompt,
         onOpenSettings = onOpenSettings,
         onOpenReliability = onOpenReliability,
         onOpenRinging = { context.startActivity(RingContract.activityIntent(context)) },
@@ -146,11 +150,18 @@ fun HomeContent(
     onDeleteAlarm: (alarmId: Long) -> Unit,
     onGoToSleep: () -> Unit,
     onEndSleep: () -> Unit,
+    onLateChange: (alarmId: Long, accept: Boolean) -> Unit,
+    onLateChoice: (alarmId: Long, accept: Boolean) -> Unit,
+    onConfirmLatePrompt: () -> Unit,
+    onDismissLatePrompt: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenReliability: () -> Unit,
     onOpenRinging: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    state.latePrompt?.let { prompt ->
+        LatePromptDialog(prompt, state.zone, onLateChoice, onConfirmLatePrompt, onDismissLatePrompt)
+    }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -191,11 +202,20 @@ fun HomeContent(
                     ) {
                         header()
                     }
-                    AlarmList(state, null, onEditAlarm, onDuplicateAlarm, onEnabledChange, onDeleteAlarm, Modifier.weight(1f))
+                    AlarmList(
+                        state,
+                        null,
+                        onEditAlarm,
+                        onDuplicateAlarm,
+                        onEnabledChange,
+                        onDeleteAlarm,
+                        onLateChange,
+                        Modifier.weight(1f),
+                    )
                 }
             } else {
                 CenteredContent {
-                    AlarmList(state, header, onEditAlarm, onDuplicateAlarm, onEnabledChange, onDeleteAlarm)
+                    AlarmList(state, header, onEditAlarm, onDuplicateAlarm, onEnabledChange, onDeleteAlarm, onLateChange)
                 }
             }
         }
@@ -246,6 +266,7 @@ private fun AlarmList(
     onDuplicateAlarm: (alarmId: Long) -> Unit,
     onEnabledChange: (alarmId: Long, enabled: Boolean) -> Unit,
     onDeleteAlarm: (alarmId: Long) -> Unit,
+    onLateChange: (alarmId: Long, accept: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -269,6 +290,7 @@ private fun AlarmList(
                 onEnabledChange = { enabled -> onEnabledChange(row.alarm.id, enabled) },
                 onDuplicate = { onDuplicateAlarm(row.alarm.id) },
                 onDelete = { onDeleteAlarm(row.alarm.id) },
+                onLateChange = { accept -> onLateChange(row.alarm.id, accept) },
             )
         }
     }
@@ -334,6 +356,10 @@ private fun HomePreviewContent(state: HomeUiState) {
             onDeleteAlarm = {},
             onGoToSleep = {},
             onEndSleep = {},
+            onLateChange = { _, _ -> },
+            onLateChoice = { _, _ -> },
+            onConfirmLatePrompt = {},
+            onDismissLatePrompt = {},
             onOpenSettings = {},
             onOpenReliability = {},
             onOpenRinging = {},

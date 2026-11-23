@@ -1,6 +1,7 @@
 package dev.balaji.rem.ui.home
 
 import dev.balaji.rem.core.Alarm
+import dev.balaji.rem.core.LateOption
 import dev.balaji.rem.core.PlannedRing
 import java.time.Instant
 import java.time.ZoneId
@@ -12,12 +13,36 @@ import java.time.ZoneOffset
  * @property ringing true while this alarm is ringing. The plan already points at the next
  *   occurrence then, so the card says "ringing" instead.
  * @property noBarcode true when the alarm has no barcode, so a plain button stops it.
+ * @property late the late option of [nextRing] while a sleep session covers it, null when
+ *   it has none. The card offers it, or the way back to the alarm time once accepted.
  */
 data class AlarmRow(
     val alarm: Alarm,
     val nextRing: PlannedRing?,
     val ringing: Boolean = false,
     val noBarcode: Boolean = false,
+    val late: LateSwitch? = null,
+)
+
+/** @property accepted true when the ring already uses [option]. */
+data class LateSwitch(val option: LateOption, val accepted: Boolean)
+
+/**
+ * Asked once after "going to sleep" was pressed, when the new session gives alarms a late
+ * option. One row per alarm, earliest late ring first. Every row starts declined.
+ */
+data class LatePrompt(val rows: List<LatePromptRow>)
+
+/**
+ * @property deadline the alarm time this occurrence must ring by without the option.
+ * @property accepted the user's choice so far. Nothing is stored before the prompt is confirmed.
+ */
+data class LatePromptRow(
+    val alarmId: Long,
+    val label: String,
+    val deadline: Instant,
+    val option: LateOption,
+    val accepted: Boolean,
 )
 
 sealed interface SleepState {
@@ -43,6 +68,8 @@ data class HomeUiState(
     val onboardingNeeded: Boolean = false,
     /** The alarm just deleted, while undo is on offer. */
     val recentlyDeleted: Alarm? = null,
+    /** Shown over the screen while not null. */
+    val latePrompt: LatePrompt? = null,
     val now: Instant = Instant.EPOCH,
     val zone: ZoneId = ZoneOffset.UTC,
 )
