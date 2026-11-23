@@ -1,0 +1,106 @@
+# Architecture
+
+rem has two Gradle modules. `:core` is plain Kotlin with `java.time` and no Android imports. `:app` is the Android application.
+
+## :core (`dev.balaji.rem.core`)
+
+All the rules live here, as pure functions and small value types, with unit tests.
+
+- `Alarm` and `Alarm.nextDeadline(after, zone)`. The alarm time is the local "must wake by" deadline. Next occurrences are computed per calendar date in the zone, so daylight saving shifts keep the wall clock time. A time in a spring-forward gap resolves to the start of the gap. A time in a fall-back overlap rings once, at its first occurrence.
+- `SleepSession` with `covers(deadline)` (after the start, up to 16 hours later) and `isActive(now)`.
+- `RemSettings` with defaults, ranges and `coerced()`. It is not called `Settings` so it does not clash with `android.provider.Settings`.
+- `computeWakeTime(deadline, session, settings, now)` returns the ring instant and a `WakeExplanation` (`Cycles(cycles, minutesBeforeDeadline)` or `AtDeadline(reason)`).
+- `planSchedule(alarms, session, settings, clock, lastFired)` returns a `SchedulePlan`: one `PlannedRing` per enabled alarm. `checkMissed(previous, lastFired, now)` finds rings that should have fired.
+- `ScannedCode`, `BarcodeKey`, `Barcode`, `normaliseBarcode`, `Collection<Barcode>.findMatch`, and `StableScanFilter` (same code in 2 consecutive frames).
+- `FallbackCode.generate` and `FallbackCode.matches` for the 40 character typed escape hatch.
+- `RingLimits.MAX_RING` is the 30 minute limit.
+
+## :app packages
+
+| Package | Holds |
+|---|---|
+| `data` | Repository interfaces, `RingStateStore`, `DataModule`. `data.db` is Room (`RemDatabase`, alarms and barcodes). `data.store` is Preferences DataStore (settings, sleep session, ring state). |
+| `schedule` | `AlarmScheduler` and its implementation `AlarmManagerScheduler`, `AlarmClocks` (the `setAlarmClock` calls), `AlarmReceiver`, `RescheduleReceiver`, `AlarmBroadcast`, `ScheduleModule.kt` |
+| `ring` | `RingController` and `DefaultRingController`, `RingingService`, `RingNotifications`, `RingingActivity`, `RingModule.kt`. `ring.audio` is the player, headphone routing, volume floor and vibration. `ring.ui` is the ringing, scanner and typed fallback screens. |
+| `scan` | `BarcodeScanner` composable and `ScannerCamera` (CameraX with the bundled ML Kit model) |
+| `ui` | Every non-ringing screen with its view model, navigation, theme, `AppLinks`, `ui.system` (system checks and settings openers) |
+| `di` | `AppContainer`, `DefaultAppContainer`, `SystemZoneClock`, access helpers |
+
+`MainActivity` and `RemApplication` sit in the root package. Strings are in `strings_ring.xml` (`ring_` prefix) and `strings_ui.xml` (`ui_` prefix), with `strings.xml` for the app name and screen titles.
+
+## Wiring
+
+There is no DI framework. `RemApplication` holds one `DefaultAppContainer`. Get it with `context.appContainer`, or `LocalAppContainer.current` in Compose. Build view models with `containerViewModel { MyViewModel(it.alarmRepository) }`.
+
+`DefaultAppContainer` never names a concrete class. It calls one module file per package:
+
+- `DataModule(context)` opens Room and three DataStore files on `context.createDeviceProtectedStorageContext()`. One instance per process, because DataStore rejects a second instance on the same file.
+- `createAlarmScheduler` builds `AlarmManagerScheduler`.
+- `createRingController` builds `DefaultRingController`. It reaches the scheduler through a lambda, so neither is created inside the other's constructor.
+- `createAlarmNotifier` builds `RingNotifications`.
+
+Everything in the container is lazy. `applicationScope` has a `SupervisorJob` and an exception handler that logs, so failed background work does not kill a process that may be ringing.
+
+The in-memory repositories (`data.fake`) and the stand-in controllers and schedulers are in the test source set only.
+
+## Who writes what
+
+- The UI writes alarms, barcodes, settings and the sleep session through the repositories. It does not call `rescheduleAll`. The scheduler collects the alarm, session, settings and ringing-record flows and reschedules itself.
+- The UI reads ring times and explanations from `AlarmScheduler.plan`. For previews (an unsaved alarm, "if I sleep now") it calls `computeWakeTime` directly.
+- `schedule` writes `RingStateStore.markFired`, `retainFired` and `setScheduled`. It disables a one-shot alarm whose only occurrence was missed.
+- `ring` writes `RingStateStore.setRinging` and `clearRinging`, disables one-shot alarms when their ring ends, and ends the sleep session when a ring it covers is dismissed. It calls `removeFired` when a ring ends undismissed with its deadline still ahead.
+
+## From "alarm saved" to "barcode scanned"
+
+1. Something changes: an alarm is saved or toggled, "going to sleep" or "I'm up" is pressed, a setting changes, the process starts, the device boots, the clock or zone changes. Each of these ends in `AlarmScheduler.rescheduleAll()`.
+2. `rescheduleAll` runs under a mutex. It ends a session older than 16 hours, runs `checkMissed` on the rings it persisted last time and reports misses through `AlarmNotifier.notifyMissed`, runs `planSchedule`, sets one `setAlarmClock` alarm per planned ring with `AlarmBroadcast.fireIntent`, cancels the rest, persists the rings with `setScheduled` and publishes `plan`. Setting the alarms is the part that must happen. Every read and write around it is caught and logged, so a failing write cannot stop the alarms from being set. More details:
+   - If a ring became due under 2 seconds ago and has no fired record yet, the run first waits out those 2 seconds. Setting an entry again would cancel a broadcast that is still on its way.
+   - A ring that looks missed is not reported by the run that first sees it. That run starts another one 5 seconds later, which reports the ring if it still has no fired record. Right after a process start or a clock jump the alarm broadcast can be queued behind the reschedule. The alarm that is ringing is never reported.
+   - A one-shot alarm that is ringing is left out of the plan. The ring disables it when it ends. Once it has been edited to another time it is planned again.
+   - A fired record is ignored when the alarm no longer has an occurrence at that instant, so editing an alarm after it rang early does not skip a day. A fired record more than 90 minutes ahead of the clock (the largest early window) was written under a clock that has moved back since, and is deleted. Fired records of switched-off alarms are deleted too.
+3. At the ring time AlarmManager sends the broadcast to `AlarmReceiver`. It reads the `ScheduledRing` from the intent and calls `RingController.startRinging(ring)` at once. Then, under `goAsync()`, it calls `RingStateStore.markFired(alarmId, deadline)` and `rescheduleAll()`. The fired record is what stops an alarm that rang at 06:45 for a 07:00 deadline from being planned again for 07:00. When `startRinging` returns false (another alarm is ringing, or the service could not start) the record is written only if the deadline has passed, so a lost early ring is planned again at its deadline.
+4. `startRinging` claims the ring, so `RingController.state` is `Ringing` before it returns, and starts `RingingService` with `RingContract.serviceIntent`. The service calls `startForeground` (type systemExempted) with a notification whose full-screen intent, tap and single "Scan to dismiss" action all open `RingingActivity`. The controller then loads the alarm, the registered barcodes and the settings, persists a `RingingRecord` and tells the service to play. Barcodes that cannot be read, also at the second try, leave no plain stop button, only the typed code.
+5. The service follows the controller's `command` flow (`Wait`, `Play`, `Stop`) and decides nothing itself. `RingPlayback` plays the tone on the alarm stream with a volume ramp, vibrates, keeps the alarm volume at the floor and, for a headphones-only alarm, pins the output to a connected headphone until it disconnects, the route turns out wrong or `speakerFallbackSeconds` pass. The vibration is one request per 2.25 second cycle, because the system cancels a vibration when the screen turns off. If Do Not Disturb mutes alarms it asks for vibration even when the alarm has vibration off, but the system may block an alarm vibration together with the tone. The reliability check for Do Not Disturb is what the user has to rely on there.
+6. `RingingActivity` shows the ringing screen over the lock screen. "five more minutes" opens the scanner screen, which hosts `BarcodeScanner`. "can't scan?" opens the typed fallback, which asks `newFallbackCode()` for a fresh code.
+7. `BarcodeScanner` reports a barcode once it was seen in 2 consecutive frames. The screen passes it to `RingController.dismissWithBarcode`. The controller compares it with the barcodes that were registered when the ring started, using `findMatch`. With none registered `state.requiresBarcode` is false and `dismissWithoutBarcode()` works instead.
+8. On dismissal the controller tells the service to stop, which restores the volume. It clears the `RingingRecord`, disables the alarm if it is one-shot and still set for the time that rang, ends the sleep session if it covers the ring's deadline and calls `rescheduleAll`. `state` becomes `Idle` and the activity finishes.
+9. If nobody dismisses within 30 minutes the controller ends the ring, the session stays and a missed-alarm notification is posted. If the deadline is still ahead (possible with an early window above 30 minutes) the fired record is removed and a one-shot alarm stays on, so the alarm rings again at the deadline. Otherwise a one-shot alarm is disabled.
+10. A second alarm that comes due during a ring does not interrupt it. If its deadline is still ahead it is planned again for the deadline. If its deadline has passed it gets a missed-alarm notification and is disabled if it is one-shot.
+
+## Reboot and process death
+
+`RemApplication.onCreate` runs on every process start, including before the first unlock. It calls `ensureChannels()`, then `RingController.recoverInterruptedRing()`, then `rescheduleAll()`.
+
+A ring that was cut off comes back, for as long as its 30 minutes have not run out. Three paths lead there, and all of them keep the start time of the persisted `RingingRecord`, so the limit counts from the first start.
+
+- The watchdog. While a ring is live the controller keeps one more `setAlarmClock` entry 60 seconds ahead and pushes it forward every 20 seconds (`RingWatchdog`, implemented by `AlarmClocks`, intent from `AlarmBroadcast.resumeIntent`). It has its own PendingIntent identity, so `rescheduleAll` never touches it. It is cancelled when the ring ends. If the process dies, by a crash, the memory limiter or Stop in the task manager, the entry fires within a minute, `AlarmReceiver` calls `RingController.resumeRinging` and the service starts with the alarm clock allowance. `resumeRinging` rings only if the record still describes that ring.
+- `recoverInterruptedRing` on process start. It waits 2 seconds, and if the record is still not live it sets the watchdog entry 5 seconds ahead. This is what happens after a reboot, which wipes every alarm clock entry. Nothing on the boot path starts the service itself, because audio started there is muted. Whether audio from an alarm clock entry that fires seconds after boot is allowed has not been checked on a device.
+- The service returns `START_REDELIVER_INTENT`, and a redelivered or retried start resumes the ring too. The system delays that restart, often by minutes, so the watchdog usually comes first.
+
+A resumed ring does not ask whether its alarm is still enabled, and it keeps the barcode rule stored in its record. Switching the alarm off or deleting the barcodes in the app and then killing the process does not silence it.
+
+- A record whose 30 minutes ran out, or whose watchdog entry cannot be set, is cleared and reported as a missed alarm. If its deadline is still ahead, the fired record is removed and a one-shot alarm stays on, so it rings at the deadline.
+- A persisted ring whose deadline passed without a fired record is reported as missed by `rescheduleAll`.
+- A force stop from Settings cancels every alarm and cannot be closed by any app.
+
+The test alarm uses id `AlarmBroadcast.TEST_ALARM_ID`. It goes through the same receiver, service and dismissal. It has no stored alarm, is not marked fired, is not in the plan and does not touch the session.
+
+## Storage rule
+
+Everything the scheduling and ringing paths read lives in device-protected storage: alarms, barcodes, settings, the sleep session and `RingStateStore`. The receivers, the service and the ringing activity are `directBootAware`. Nothing created during `Application.onCreate` may touch credential-protected storage. A user-picked ringtone may be unreadable before the first unlock, so the player falls back to the bundled tone.
+
+ML Kit initialises itself from a content provider that is not direct boot aware. `ScannerCamera` initialises it by hand when that provider has not run. CameraX has the same problem with the service it reads its configuration from, so `RemApplication` implements `CameraXConfig.Provider`. The CameraX controller is built inside `ScannerCamera.bind`, so a scanner that still cannot start reports a camera error, and the screen offers the typed fallback and an unlock button.
+
+`ScannerCamera` hands ML Kit the main executor for its results. An executor that can be shut down must not be used there: ML Kit delivers a cancellation after `release`, and a rejected task would crash the process on the main thread.
+
+## Network
+
+The app does not use the network. The manifest removes `INTERNET` and `ACCESS_NETWORK_STATE`, which ML Kit's logging library would otherwise merge in. `RemApplicationTest` checks the merged manifest.
+
+## Tests
+
+`:core` has plain JUnit tests. `:app` tests run on the JVM with Robolectric and coroutines-test: contract tests for every repository (run against Room, DataStore and the in-memory fakes), the scheduler against Robolectric's AlarmManager, the ring controller with a fake service launcher, the view models, and `AlarmFlowTest`, which runs whole flows on the real container. Nothing covers the service, the audio classes, the camera or the Compose screens. No part of the app has run on a device yet.
+
+## Build
+
+CI (`.github/workflows/build.yml`) runs `./gradlew :core:test :app:assembleDebug :app:testDebugUnitTest` on every push and uploads the debug APK as the `rem-debug-apk` artifact.

@@ -1,4 +1,10 @@
 <resources>
+    <!-- App-wide strings. Package-specific strings go in strings_ring.xml and strings_ui.xml. -->
     <string name="app_name">rem</string>
-    <string name="placeholder_tagline">1rem = 90min</string>
+
+    <string name="screen_home">Alarms</string>
+    <string name="screen_barcodes">Barcodes</string>
+    <string name="screen_barcode_scan">Scan a barcode</string>
+    <string name="screen_settings">Settings</string>
+    <string name="screen_reliability">Reliability</string>
 </resources>

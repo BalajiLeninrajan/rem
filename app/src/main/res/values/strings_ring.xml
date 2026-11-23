@@ -1,0 +1,44 @@
+<resources>
+    <!-- Strings owned by the ring package. Prefix every name with ring_. -->
+    <string name="ring_channel_ringing_name">Ringing alarm</string>
+    <string name="ring_channel_ringing_description">Shows the alarm that is ringing and opens it over the lock screen.</string>
+    <string name="ring_channel_missed_name">Missed alarms</string>
+    <string name="ring_channel_missed_description">Tells you when an alarm did not ring or was not stopped.</string>
+
+    <string name="ring_default_label">Alarm</string>
+    <string name="ring_test_alarm_label">Test alarm</string>
+    <string name="ring_notification_text">Ringing. Open to stop it.</string>
+    <string name="ring_action_scan">Scan to dismiss</string>
+
+    <string name="ring_missed_title">Missed alarm</string>
+    <string name="ring_missed_title_labelled">Missed alarm: %1$s</string>
+    <string name="ring_missed_not_fired">The %1$s alarm did not ring. Open the reliability checks.</string>
+    <string name="ring_missed_interrupted">The %1$s alarm was cut off while it was ringing. Open the reliability checks.</string>
+    <string name="ring_missed_timed_out">The %1$s alarm rang for 30 minutes and then stopped.</string>
+    <string name="ring_missed_other_ringing">The %1$s alarm came due while another alarm was ringing, so it did not ring by itself.</string>
+
+    <string name="ring_five_more_minutes">five more minutes</string>
+    <string name="ring_cant_scan">can\'t scan?</string>
+    <string name="ring_stop_alarm">Stop alarm</string>
+    <string name="ring_no_barcode_hint">No barcode is registered, so this button stops the alarm.</string>
+
+    <string name="ring_scanner_instruction">Point the camera at one of your registered barcodes.</string>
+    <string name="ring_scanner_rejected">%1$s is not one of your barcodes. Scan a registered one.</string>
+    <string name="ring_scanner_torch_on">Light on</string>
+    <string name="ring_scanner_torch_off">Light off</string>
+    <string name="ring_scanner_back">Back</string>
+    <string name="ring_scanner_needs_permission">The camera permission is missing. Allow it, or type the code instead. If the phone is locked, unlock it first.</string>
+    <string name="ring_scanner_camera_failed">The camera did not open. Try again, or type the code instead. If the phone is locked, unlocking it can help.</string>
+    <string name="ring_scanner_permission_blocked">The camera permission is off and the phone will not ask again. Type the code instead, or allow the camera in the app settings. If the phone is locked, it asks you to unlock first.</string>
+    <string name="ring_scanner_allow_camera">Allow camera</string>
+    <string name="ring_scanner_open_settings">Open app settings</string>
+    <string name="ring_scanner_try_again">Try again</string>
+    <string name="ring_scanner_unlock">Unlock phone</string>
+    <string name="ring_scanner_type_instead">Type the code instead</string>
+
+    <string name="ring_typed_instruction">Type this code to stop the alarm. Pasting does not work.</string>
+    <string name="ring_typed_field_label">Code</string>
+    <string name="ring_typed_progress">%1$d of %2$d correct</string>
+    <string name="ring_typed_wrong">Character %1$d is wrong. Delete it and try again.</string>
+    <string name="ring_typed_back">Back</string>
+</resources>
