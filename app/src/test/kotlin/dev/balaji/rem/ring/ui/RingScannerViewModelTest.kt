@@ -6,11 +6,12 @@ import org.junit.Test
 
 class RingScannerViewModelTest {
     @Test
-    fun `opening the scanner starts one quiet period`() {
+    fun `a scanner made from saved state leaves the ring loud`() {
         val controller = IdleRingController()
 
         RingScannerViewModel(controller)
 
-        assertEquals(1, controller.quietPeriodsStarted)
+        // The tap that opens the scanner starts the quiet period, not the scanner itself.
+        assertEquals(0, controller.quietPeriodsStarted)
     }
 }

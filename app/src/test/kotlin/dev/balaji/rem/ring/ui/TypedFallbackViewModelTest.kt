@@ -9,8 +9,8 @@ class TypedFallbackViewModelTest {
     private val viewModel = TypedFallbackViewModel(controller)
 
     @Test
-    fun `opening the screen starts one quiet period`() {
-        assertEquals(1, controller.quietPeriodsStarted)
+    fun `a typed fallback screen made from saved state leaves the ring loud`() {
+        assertEquals(0, controller.quietPeriodsStarted)
     }
 
     @Test

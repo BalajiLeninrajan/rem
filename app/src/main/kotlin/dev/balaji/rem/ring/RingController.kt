@@ -99,8 +99,8 @@ interface RingController {
 
     /**
      * Turns the tone and the vibration off for [dev.balaji.rem.core.RingLimits.QUIET_PERIOD],
-     * so the user can scan or type the code in peace. The scanner and typed fallback screens
-     * call this each time they open, and each call starts a fresh period. The alarm rings
+     * so the user can scan or type the code in peace. Each tap that opens the scanner or the
+     * typed fallback calls this, and each call starts a fresh period. The alarm rings
      * again when the period runs out without a dismissal, or at once on [endQuietPeriod].
      * The volume floor stays in force and the quiet time counts toward the 30 minute limit.
      * A ring picked up again after a process death starts loud. Does nothing when nothing
@@ -108,7 +108,7 @@ interface RingController {
      */
     fun startQuietPeriod()
 
-    /** Makes the alarm loud again at once. The ringing screen calls this whenever it shows. */
+    /** Makes the alarm loud again at once. The ringing screen calls this each time it is back on top. */
     fun endQuietPeriod()
 
     /**

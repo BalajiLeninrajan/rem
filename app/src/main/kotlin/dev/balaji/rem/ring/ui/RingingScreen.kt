@@ -21,7 +21,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -34,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.balaji.rem.R
 import dev.balaji.rem.di.LocalAppContainer
@@ -47,7 +47,7 @@ import kotlinx.coroutines.launch
 /**
  * The time, the alarm label, the "scan to dismiss" button that opens the scanner, and the
  * "can't scan?" link. The alarm is loud whenever this screen shows: coming back here ends
- * the quiet period that the scanner or the typed fallback started.
+ * the quiet period that opening the scanner or the typed fallback started.
  */
 @Composable
 fun RingingScreen(
@@ -64,8 +64,12 @@ fun RingingScreen(
     // Back does nothing while an alarm rings.
     BackHandler {}
 
-    // Runs when this screen enters composition: on the first show and on every return from the scanner or the typed code.
-    LaunchedEffect(controller) { controller.endQuietPeriod() }
+    // Runs each time this screen settles on top: on the first show and on every return from the scanner or the typed code.
+    // A predictive back gesture only brings this entry to STARTED while it previews it, so a cancelled gesture keeps the quiet.
+    LifecycleResumeEffect(controller) {
+        controller.endQuietPeriod()
+        onPauseOrDispose {}
+    }
 
     val header: @Composable (Modifier) -> Unit = { headerModifier ->
         RingHeader(time = currentTime(container.clock), label = ringing?.label.orEmpty(), modifier = headerModifier)
