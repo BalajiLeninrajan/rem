@@ -127,6 +127,13 @@
     <string name="ui_editor_ramp">Volume ramp</string>
     <string name="ui_editor_ramp_description">How long the sound takes to reach full volume.</string>
     <string name="ui_editor_ramp_off">Off</string>
+    <string name="ui_editor_snooze">Snooze</string>
+    <string name="ui_editor_snooze_limit">Snoozes per ring</string>
+    <string name="ui_editor_snooze_limit_description">How many times you can snooze before only dismiss is left. Snoozing needs no barcode.</string>
+    <string name="ui_editor_snooze_off">Off</string>
+    <string name="ui_editor_snooze_times">%d</string>
+    <string name="ui_editor_snooze_minutes">Snooze length</string>
+    <string name="ui_editor_snooze_minutes_description">How long the alarm stays quiet before it rings again.</string>
     <string name="ui_editor_barcodes">Barcodes</string>
     <string name="ui_editor_delete_title">Delete this alarm?</string>
 

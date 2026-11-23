@@ -73,6 +73,8 @@ abstract class AlarmRepositoryContract {
             ringtoneUri = "content://media/internal/audio/media/12",
             minRingVolumePercent = 45,
             volumeRampSeconds = 0,
+            snoozeMinutes = 12,
+            snoozeLimit = 0,
         )
 
         val id = repository.upsert(full)
@@ -87,6 +89,15 @@ abstract class AlarmRepositoryContract {
         val id = repository.upsert(seven.copy(minRingVolumePercent = 150, volumeRampSeconds = -5))
 
         assertEquals(seven.copy(id = id, minRingVolumePercent = 100, volumeRampSeconds = 0), repository.get(id))
+    }
+
+    @Test
+    fun `snooze values outside their ranges are coerced on write`() = runTest {
+        val repository = createRepository()
+
+        val id = repository.upsert(seven.copy(snoozeMinutes = 0, snoozeLimit = 99))
+
+        assertEquals(seven.copy(id = id, snoozeMinutes = 1, snoozeLimit = 10), repository.get(id))
     }
 
     @Test

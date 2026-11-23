@@ -50,6 +50,9 @@ data class AlarmEditorUiState(
     val minRingVolumePercent: Int = Alarm.DEFAULT_MIN_RING_VOLUME_PERCENT,
     /** 0 disables the ramp. */
     val volumeRampSeconds: Int = Alarm.DEFAULT_VOLUME_RAMP_SECONDS,
+    val snoozeMinutes: Int = Alarm.DEFAULT_SNOOZE_MINUTES,
+    /** 0 turns snooze off. */
+    val snoozeLimit: Int = Alarm.DEFAULT_SNOOZE_LIMIT,
     /**
      * The barcodes that stop this alarm, oldest first. For a stored alarm these are the
      * stored ones. For a new alarm they wait in the editor, with [Barcode.NEW_ID], until save.
@@ -71,7 +74,7 @@ data class AlarmEditorUiState(
  * Edits one alarm, or creates one when there is no stored alarm with [alarmId].
  *
  * A new alarm with a [copyFromId] is a duplicate. It starts with that alarm's time, label,
- * days and sound, and with copies of its barcodes as unsaved barcodes. Nothing is stored
+ * days, sound and snooze, and with copies of its barcodes as unsaved barcodes. Nothing is stored
  * until [save]. A [copyFromId] that names no stored alarm gives the defaults.
  *
  * It is also the [BarcodeTarget] of the scan screen opened from the editor. A barcode added
@@ -146,6 +149,8 @@ class AlarmEditorViewModel(
                         ringtoneUri = from.ringtoneUri,
                         minRingVolumePercent = from.minRingVolumePercent,
                         volumeRampSeconds = from.volumeRampSeconds,
+                        snoozeMinutes = from.snoozeMinutes,
+                        snoozeLimit = from.snoozeLimit,
                     )
                 }
             }
@@ -176,6 +181,10 @@ class AlarmEditorViewModel(
     fun setVolumeRampSeconds(value: Int) =
         draft.update { it.copy(volumeRampSeconds = value.coerceIn(Alarm.VOLUME_RAMP_SECONDS)) }
 
+    fun setSnoozeMinutes(value: Int) = draft.update { it.copy(snoozeMinutes = value.coerceIn(Alarm.SNOOZE_MINUTES)) }
+
+    fun setSnoozeLimit(value: Int) = draft.update { it.copy(snoozeLimit = value.coerceIn(Alarm.SNOOZE_LIMIT)) }
+
     fun save() {
         val current = draft.value
         if (!current.canSave || current.finished) return
@@ -193,6 +202,8 @@ class AlarmEditorViewModel(
                 ringtoneUri = current.ringtoneUri,
                 minRingVolumePercent = current.minRingVolumePercent,
                 volumeRampSeconds = current.volumeRampSeconds,
+                snoozeMinutes = current.snoozeMinutes,
+                snoozeLimit = current.snoozeLimit,
             )
             if (original == null) alarms.upsertWithBarcodes(alarm, pending.value) else alarms.upsert(alarm)
             draft.update { it.copy(finished = true) }

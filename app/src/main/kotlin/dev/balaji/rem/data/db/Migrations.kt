@@ -2,6 +2,7 @@ package dev.balaji.rem.data.db
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import dev.balaji.rem.core.Alarm
 
 /**
  * Version 1 to 2:
@@ -58,8 +59,23 @@ internal val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+/**
+ * Version 2 to 3: alarms get `snooze_minutes` and `snooze_limit`, at the defaults of
+ * [Alarm]. The column defaults are part of the schema Room checks on open.
+ */
+internal val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `alarms` ADD COLUMN `snooze_minutes` INTEGER NOT NULL DEFAULT ${Alarm.DEFAULT_SNOOZE_MINUTES}",
+        )
+        db.execSQL(
+            "ALTER TABLE `alarms` ADD COLUMN `snooze_limit` INTEGER NOT NULL DEFAULT ${Alarm.DEFAULT_SNOOZE_LIMIT}",
+        )
+    }
+}
+
 /** Every migration, oldest first. */
-internal val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
+internal val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 
 /** The global volume defaults of version 1. Version 1 kept no per-alarm volume. */
 private const val OLD_MIN_RING_VOLUME_PERCENT = 70

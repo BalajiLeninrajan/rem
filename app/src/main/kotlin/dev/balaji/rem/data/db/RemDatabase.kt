@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [AlarmEntity::class, BarcodeEntity::class], version = 2)
+@Database(entities = [AlarmEntity::class, BarcodeEntity::class], version = 3)
 @TypeConverters(Converters::class)
 abstract class RemDatabase : RoomDatabase() {
     abstract fun alarmDao(): AlarmDao
