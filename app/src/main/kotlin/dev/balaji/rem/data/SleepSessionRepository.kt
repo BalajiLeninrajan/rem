@@ -11,9 +11,19 @@ interface SleepSessionRepository {
 
     suspend fun current(): SleepSession?
 
-    /** Starts a session at [startedAt], replacing any session that was active. */
+    /** Starts a session at [startedAt] with no late option accepted, replacing any session that was active. */
     suspend fun start(startedAt: Instant): SleepSession
 
-    /** Ends the session. Does nothing when none is active. */
+    /**
+     * Accepts the late option of [alarmId] in the active session (see `LateOption` in :core),
+     * so its covered occurrence rings at the first cycle boundary after its deadline. Does
+     * nothing when no session is active.
+     */
+    suspend fun acceptLate(alarmId: Long)
+
+    /** Takes back [acceptLate] for [alarmId], so it rings at its deadline again. Does nothing when not accepted. */
+    suspend fun revokeLate(alarmId: Long)
+
+    /** Ends the session and forgets its accepted late options. Does nothing when none is active. */
     suspend fun end()
 }

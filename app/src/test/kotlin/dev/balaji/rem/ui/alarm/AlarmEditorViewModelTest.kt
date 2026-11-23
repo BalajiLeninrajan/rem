@@ -425,4 +425,25 @@ class AlarmEditorViewModelTest {
         assertEquals("Mine", editor.state.value.label)
         assertTrue(editor.state.value.barcodes.isEmpty())
     }
+
+    @Test
+    fun `the preview shows an accepted late option, also between the deadline and the late ring`() = runTest {
+        // A session at midnight has boundaries 04:45 and 06:15. 06:15 is the late option for 06:00.
+        clock.now = at("2026-01-15T00:00")
+        val id = alarms.upsert(Alarm(time = LocalTime.of(6, 0)))
+        sessions.start(clock.instant())
+        sessions.acceptLate(id)
+        val editor = editor(id)
+
+        val preview = editor.state.value.preview!!
+        assertEquals(at("2026-01-15T06:15"), preview.ringAt)
+        assertEquals(WakeExplanation.LateCycles(cycles = 4, minutesAfterDeadline = 15), preview.explanation)
+
+        clock.now = at("2026-01-15T06:05")
+        editor.refresh()
+        advanceUntilIdle()
+        assertEquals(at("2026-01-15T06:15"), editor.state.value.preview?.ringAt)
+        assertEquals(at("2026-01-15T06:00"), editor.state.value.preview?.deadline)
+    }
 }
+

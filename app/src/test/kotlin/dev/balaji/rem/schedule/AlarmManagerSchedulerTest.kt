@@ -585,4 +585,166 @@ class AlarmManagerSchedulerTest {
         assertNull(scheduler.plan.value.forAlarm(AlarmBroadcast.TEST_ALARM_ID))
         assertEquals(listOf(id), ringState.scheduled().map { it.alarmId })
     }
+
+    // Late option: a session at midnight has boundaries 01:45, 03:15, 04:45 and 06:15. No cycle
+    // ends inside 06:00's early window, so 06:15 is offered and, once accepted, rings.
+    private val sixDaily = Alarm(time = LocalTime.of(6, 0), label = "gym", repeatDays = RepeatDays.EVERY_DAY)
+    private val sixOnce = Alarm(time = LocalTime.of(6, 0), label = "train")
+    private val sixDeadline get() = at("2026-01-15T06:00")
+    private val sixLate get() = at("2026-01-15T06:15")
+
+    /** Stores [alarm] and starts a session at midnight with its late option accepted. */
+    private suspend fun TestScope.acceptedLate(alarm: Alarm): Long {
+        clock.now = at("2026-01-15T00:00")
+        val id = alarms.upsert(alarm)
+        sessions.start(clock.instant())
+        sessions.acceptLate(id)
+        runCurrent()
+        return id
+    }
+
+    @Test
+    fun `an accepted late option is set after the deadline and turning it down moves it back`() = runTest {
+        val scheduler = scheduler()
+        val id = acceptedLate(sixDaily)
+
+        assertEquals(listOf(ScheduledRing(id, sixLate, sixDeadline)), alarmClocks())
+        assertEquals(WakeExplanation.LateCycles(4, 15), scheduler.plan.value.forAlarm(id)?.explanation)
+
+        sessions.revokeLate(id)
+        runCurrent()
+
+        assertEquals(listOf(ScheduledRing(id, sixDeadline, sixDeadline)), alarmClocks())
+        assertEquals(sixLate, scheduler.plan.value.forAlarm(id)?.late?.ringAt)
+    }
+
+    @Test
+    fun `every reschedule between the deadline and the late ring keeps the late ring`() = runTest {
+        val scheduler = scheduler()
+        val id = acceptedLate(sixDaily)
+        val other = alarms.upsert(sevenDaily.copy(time = LocalTime.of(6, 5)))
+        runCurrent()
+        val late = ScheduledRing(id, sixLate, sixDeadline)
+
+        clock.now = at("2026-01-15T06:00:30")
+        scheduler.rescheduleAll() // clock change
+        assertTrue(late in alarmClocks())
+
+        settings.update { it.copy(headphonesOnly = true) } // a setting that leaves the late option alone
+        runCurrent()
+        assertTrue(late in alarmClocks())
+
+        clock.now = at("2026-01-15T06:05:01")
+        ringState.markFired(other, at("2026-01-15T06:05")) // the other alarm fired
+        scheduler.rescheduleAll()
+        assertTrue(late in alarmClocks())
+
+        clock.now = at("2026-01-15T06:10")
+        val restarted = scheduler() // a process start or a reboot: a new scheduler, the same storage
+        confirmMissed()
+
+        assertEquals(listOf(late), alarmClocks().filter { it.alarmId == id })
+        assertEquals(sixLate, restarted.plan.value.forAlarm(id)?.ringAt)
+        assertEquals(sixLate, scheduler.plan.value.forAlarm(id)?.ringAt)
+        assertTrue(notifier.missed.isEmpty())
+    }
+
+    @Test
+    fun `a late ring is kept by the session alone when the persisted rings were lost`() = runTest {
+        val scheduler = scheduler()
+        val id = acceptedLate(sixOnce)
+
+        clock.now = at("2026-01-15T06:05")
+        ringState.setScheduled(emptyList())
+        scheduler.rescheduleAll()
+
+        assertEquals(listOf(ScheduledRing(id, sixLate, sixDeadline)), alarmClocks())
+        assertEquals(true, alarms.get(id)?.enabled)
+    }
+
+    @Test
+    fun `a late ring that fired moves the alarm to its next occurrence`() = runTest {
+        val scheduler = scheduler()
+        val id = acceptedLate(sixDaily)
+
+        clock.now = sixLate.plusSeconds(1)
+        ringState.markFired(id, sixDeadline)
+        scheduler.rescheduleAll()
+        confirmMissed()
+
+        val tomorrow = at("2026-01-16T06:00")
+        assertEquals(listOf(ScheduledRing(id, tomorrow, tomorrow)), alarmClocks())
+        assertTrue(notifier.missed.isEmpty())
+    }
+
+    @Test
+    fun `a late ring that never fires is reported at its ring time, not at its deadline`() = runTest {
+        val scheduler = scheduler()
+        val id = acceptedLate(sixOnce)
+
+        clock.now = at("2026-01-15T06:10")
+        scheduler.rescheduleAll()
+        confirmMissed()
+        assertTrue(notifier.missed.isEmpty())
+
+        clock.now = at("2026-01-15T06:20")
+        scheduler.rescheduleAll()
+        confirmMissed()
+
+        assertEquals(listOf(MissedAlarm(id, "train", sixDeadline, MissedReason.NOT_FIRED)), notifier.missed)
+        assertEquals(false, alarms.get(id)?.enabled)
+    }
+
+    @Test
+    fun `turning a late option down after the deadline rings at once`() = runTest {
+        val scheduler = scheduler()
+        val id = acceptedLate(sixDaily)
+        clock.now = at("2026-01-15T06:05")
+        scheduler.rescheduleAll()
+
+        sessions.revokeLate(id)
+        runCurrent()
+
+        assertEquals(listOf(ScheduledRing(id, clock.now, sixDeadline)), alarmClocks())
+        assertEquals(
+            WakeExplanation.AtDeadline(DeadlineReason.NO_CYCLE_IN_WINDOW),
+            scheduler.plan.value.forAlarm(id)?.explanation,
+        )
+    }
+
+    @Test
+    fun `ending the session after the deadline rings a late ring at once`() = runTest {
+        val scheduler = scheduler()
+        val id = acceptedLate(sixDaily)
+        clock.now = at("2026-01-15T06:05")
+        scheduler.rescheduleAll()
+
+        sessions.end()
+        runCurrent()
+
+        assertEquals(listOf(ScheduledRing(id, clock.now, sixDeadline)), alarmClocks())
+        assertEquals(WakeExplanation.AtDeadline(DeadlineReason.NO_SESSION), scheduler.plan.value.forAlarm(id)?.explanation)
+    }
+
+    @Test
+    fun `a session with an accepted late option is not ended before its last late ring`() = runTest {
+        // 60 minute cycles from 14:25: 05:25 is 35 minutes early for 06:00, so 06:25 is the late option.
+        // The session ends its 16 hours at 06:20.
+        settings.update { it.copy(cycleMinutes = 60, fallAsleepMinutes = 5) }
+        clock.now = at("2026-01-14T14:20")
+        val scheduler = scheduler()
+        val id = alarms.upsert(sixDaily)
+        sessions.start(clock.instant())
+        sessions.acceptLate(id)
+        runCurrent()
+        val late = ScheduledRing(id, at("2026-01-15T06:25"), sixDeadline)
+        assertEquals(listOf(late), alarmClocks())
+
+        clock.now = at("2026-01-15T06:22")
+        scheduler.rescheduleAll()
+
+        assertEquals(setOf(id), sessions.current()?.acceptedLate)
+        assertEquals(listOf(late), alarmClocks())
+    }
 }
+

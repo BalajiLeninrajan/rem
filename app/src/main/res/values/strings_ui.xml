@@ -37,6 +37,11 @@
         <item quantity="one">%1$d cycle, %2$d min before %3$s</item>
         <item quantity="other">%1$d cycles, %2$d min before %3$s</item>
     </plurals>
+    <!-- %1$d sleep cycles, %2$d minutes, %3$s the must-wake-by time. The user chose to ring this late. -->
+    <plurals name="ui_explain_cycles_late">
+        <item quantity="one">%1$d cycle, %2$d min after %3$s</item>
+        <item quantity="other">%1$d cycles, %2$d min after %3$s</item>
+    </plurals>
     <plurals name="ui_explain_cycles_on_deadline">
         <item quantity="one">%d cycle, ending right on time</item>
         <item quantity="other">%d cycles, ending right on time</item>

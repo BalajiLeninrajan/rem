@@ -9,7 +9,8 @@ import java.time.ZoneId
 
 /**
  * One alarm. [time] is the local "must wake by" time, the deadline. The alarm may ring
- * earlier than this when a sleep session is active, never later.
+ * earlier than this when a sleep session is active. It rings later only when the user
+ * accepted its late option in the session, and then by at most [LATE_WINDOW].
  *
  * @property id 0 until the alarm has been saved.
  * @property repeatDays empty means one-shot. A one-shot alarm is disabled when its ring ends.
@@ -60,6 +61,12 @@ data class Alarm(
         }
         error("No occurrence of $time on $repeatDays within $SEARCH_DAYS days of $after in $zone")
     }
+
+    /**
+     * Whether [deadline] is an occurrence of this alarm. False once the alarm has been
+     * edited to another time or other days, which makes a stored deadline stale.
+     */
+    fun hasOccurrenceAt(deadline: Instant, zone: ZoneId): Boolean = nextDeadline(deadline.minusMillis(1), zone) == deadline
 
     companion object {
         const val NEW_ID = 0L

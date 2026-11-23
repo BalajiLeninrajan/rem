@@ -171,15 +171,16 @@ private fun SchedulePlan.firstCoveredBy(session: SleepSession): PlannedRing? =
 
 /**
  * The first ring if a session started at [now]. It reuses the deadlines of the current plan,
- * which already skip occurrences that have fired.
+ * which already skip occurrences that have fired. A late ring whose deadline has passed is
+ * not covered by a new session, which accepts no late option, so it would ring at once.
  */
 internal fun sleepNowPreview(plan: SchedulePlan, settings: RemSettings, now: Instant): PlannedRing? {
     val session = SleepSession(now)
     return plan.rings
-        .filter { session.covers(it.deadline) }
+        .filter { session.covers(it.deadline) || it.deadline <= now }
         .map { ring ->
             val wake = computeWakeTime(ring.deadline, session, settings, now)
-            PlannedRing(ring.alarmId, wake.ringAt, ring.deadline, wake.explanation)
+            PlannedRing(ring.alarmId, wake.ringAt, ring.deadline, wake.explanation, wake.late)
         }
         .minByOrNull { it.ringAt }
 }

@@ -906,4 +906,101 @@ class DefaultRingControllerTest {
         assertEquals(RingingState.Idle, controller.state.value)
         assertEquals(RingCommand.Stop, controller.command.value)
     }
+
+    /** A ring for an accepted late option: 15 minutes after the 07:00 deadline. The clock is at the ring. */
+    private suspend fun lateRingFor(alarmId: Long): ScheduledRing {
+        val late = ScheduledRing(alarmId, ringAt = deadline.plusSeconds(15 * 60), deadline = deadline)
+        clock.now = late.ringAt
+        sessions.start(deadline.minusSeconds(6 * 3600))
+        sessions.acceptLate(alarmId)
+        // The receiver records the fire as the ring starts.
+        ringState.markFired(alarmId, deadline)
+        return late
+    }
+
+    @Test
+    fun `a dismissed late ring switches the one-shot alarm off and ends the session, which still covers its deadline`() = runTest {
+        val id = oneShot()
+        val late = lateRingFor(id)
+        val controller = controller()
+        assertTrue(controller.startRinging(late))
+        runCurrent()
+
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithoutBarcode())
+
+        assertEquals(false, alarms.get(id)?.enabled)
+        assertNull(sessions.current())
+        assertEquals(mapOf(id to deadline), ringState.lastFired())
+        assertTrue(missed.isEmpty())
+    }
+
+    @Test
+    fun `a late ring that times out is over, because its deadline has passed`() = runTest {
+        val id = oneShot()
+        val late = lateRingFor(id)
+        val controller = controller()
+        controller.startRinging(late)
+        runCurrent()
+
+        clock.now = late.ringAt.plus(RingLimits.MAX_RING)
+        advanceTimeBy(RingLimits.MAX_RING.toMillis() + 1)
+        runCurrent()
+
+        assertEquals(listOf(MissedAlarm(id, "Work", deadline, MissedReason.RING_TIMED_OUT)), missed)
+        assertEquals(false, alarms.get(id)?.enabled)
+        assertEquals("the fired record stays, nothing is owed", mapOf(id to deadline), ringState.lastFired())
+        assertEquals(deadline.minusSeconds(6 * 3600), sessions.current()?.startedAt)
+    }
+
+    @Test
+    fun `a late ring that comes due during another ring is reported as missed`() = runTest {
+        val first = oneShot("First")
+        val second = oneShot("Second")
+        val controller = ringing(first)
+        val late = lateRingFor(second)
+
+        assertFalse(controller.startRinging(late))
+        runCurrent()
+
+        assertEquals(first, (controller.state.value as RingingState.Ringing).alarmId)
+        assertEquals(listOf(MissedAlarm(second, "Second", deadline, MissedReason.OTHER_ALARM_RINGING)), missed)
+        assertEquals(false, alarms.get(second)?.enabled)
+    }
+
+    @Test
+    fun `a late ring whose service cannot start ends the one-shot alarm`() = runTest {
+        val id = oneShot()
+        val late = lateRingFor(id)
+        serviceStartFails = true
+        val controller = controller()
+
+        assertFalse(controller.startRinging(late))
+        runCurrent()
+
+        assertEquals(MissedReason.RING_INTERRUPTED, missed.single().reason)
+        assertEquals(false, alarms.get(id)?.enabled)
+        assertEquals(mapOf(id to deadline), ringState.lastFired())
+    }
+
+    @Test
+    fun `a late ring cut off by a process death comes back after its deadline`() = runTest {
+        val id = oneShot()
+        val late = lateRingFor(id)
+        val record = RingingRecord(id, startedAt = late.ringAt, ringAt = late.ringAt, deadline = deadline, requiresBarcode = false)
+        ringState.setRinging(record)
+        clock.now = late.ringAt.plusSeconds(120)
+        val controller = controller()
+
+        controller.recoverInterruptedRing()
+
+        assertEquals(late, watchdogEntry?.first)
+        controller.resumeRinging(late)
+        runCurrent()
+
+        assertEquals(late.ringAt, (controller.state.value as RingingState.Ringing).startedAt)
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithoutBarcode())
+        assertNull(sessions.current())
+        assertEquals(false, alarms.get(id)?.enabled)
+    }
 }
+

@@ -4,6 +4,9 @@ import dev.balaji.rem.core.Alarm
 import dev.balaji.rem.core.Barcode
 import dev.balaji.rem.core.BarcodeFormat
 import dev.balaji.rem.core.DeadlineReason
+import dev.balaji.rem.core.PlannedRing
+import dev.balaji.rem.core.RemSettings
+import dev.balaji.rem.core.SchedulePlan
 import dev.balaji.rem.core.RepeatDays
 import dev.balaji.rem.core.WakeExplanation
 import dev.balaji.rem.data.fake.InMemoryAlarmRepository
@@ -334,4 +337,16 @@ class HomeViewModelTest {
         assertTrue(viewModel.state.value.ringing)
         assertEquals(mapOf(id to false), viewModel.state.value.alarms.associate { it.alarm.id to it.ringing })
     }
+
+    @Test
+    fun `the sleep-now preview rings a late ring still to come at once, because a new session drops it`() {
+        val deadline = at("2026-01-15T06:00")
+        val late = PlannedRing(7, at("2026-01-15T06:15"), deadline, WakeExplanation.LateCycles(4, 15))
+        val now = at("2026-01-15T06:05")
+
+        val preview = sleepNowPreview(SchedulePlan(listOf(late)), RemSettings(), now)
+
+        assertEquals(PlannedRing(7, now, deadline, WakeExplanation.AtDeadline(DeadlineReason.OUTSIDE_SESSION)), preview)
+    }
 }
+

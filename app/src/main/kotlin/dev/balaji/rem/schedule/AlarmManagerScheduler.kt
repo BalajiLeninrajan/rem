@@ -111,7 +111,8 @@ class AlarmManagerScheduler(
             }
             val current = readOr(RemSettings.DEFAULT) { settings.current() }
             val firedOccurrences = fired.filter { (id, deadline) -> stored.any { it.isOccurrence(id, deadline) } }
-            val plan = planSchedule(candidates, session, current, clock, firedOccurrences)
+            // The previous rings keep a late ring planned between its deadline and its ring time.
+            val plan = planSchedule(candidates, session, current, clock, firedOccurrences, previous)
 
             val plannedIds = plan.rings.mapTo(mutableSetOf()) { it.alarmId }
             (storedIds + previous.map { it.alarmId } - plannedIds).forEach { alarmClocks.cancel(it) }
@@ -152,8 +153,9 @@ class AlarmManagerScheduler(
 
     /**
      * The stored fired deadlines. The receiver writes one when a ring starts, and a ring
-     * starts at most the largest early window before its deadline. A record further ahead
-     * than that was written under a clock that has since moved back. It would make the
+     * starts at most the largest early window before its deadline. A late ring starts after
+     * its deadline, so its record is behind the clock. A record further ahead than the
+     * largest early window was written under a clock that has since moved back. It would make the
      * plan skip real occurrences, so it is deleted.
      */
     private suspend fun firedRecords(now: Instant): Map<Long, Instant> {
@@ -171,7 +173,7 @@ class AlarmManagerScheduler(
      * occurrence that no longer exists, and it must not hide the new one.
      */
     private fun Alarm.isOccurrence(alarmId: Long, deadline: Instant): Boolean =
-        id == alarmId && nextDeadline(deadline.minusMillis(1), clock.zone) == deadline
+        id == alarmId && hasOccurrenceAt(deadline, clock.zone)
 
     /** A session that cannot be read or ended counts as none, so the alarms ring at their deadlines. */
     private suspend fun activeSession(now: Instant): SleepSession? {

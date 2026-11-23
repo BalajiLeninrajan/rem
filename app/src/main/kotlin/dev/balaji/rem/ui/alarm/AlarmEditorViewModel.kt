@@ -7,7 +7,7 @@ import dev.balaji.rem.core.Barcode
 import dev.balaji.rem.core.RemSettings
 import dev.balaji.rem.core.SleepSession
 import dev.balaji.rem.core.WakeExplanation
-import dev.balaji.rem.core.computeWakeTime
+import dev.balaji.rem.core.planRing
 import dev.balaji.rem.data.AlarmRepository
 import dev.balaji.rem.data.BarcodeRepository
 import dev.balaji.rem.data.SettingsRepository
@@ -251,9 +251,11 @@ class AlarmEditorViewModel(
 
     private fun preview(current: AlarmEditorUiState, settings: RemSettings, session: SleepSession?, now: Instant): RingPreview {
         val activeSession = session?.takeIf { it.isActive(now) }
-        val deadline = Alarm(time = current.time, repeatDays = current.repeatDays).nextDeadline(now, clock.zone)
-        val wake = computeWakeTime(deadline, activeSession, settings, now)
-        return RingPreview(wake.ringAt, deadline, wake.explanation, sessionActive = activeSession != null)
+        // Planned like the scheduler plans it, so a late option accepted for this alarm shows,
+        // and so does a late ring still to come after the deadline has passed.
+        val draftAlarm = Alarm(id = alarmId, time = current.time, repeatDays = current.repeatDays)
+        val ring = planRing(draftAlarm, activeSession, settings, now, clock.zone)
+        return RingPreview(ring.ringAt, ring.deadline, ring.explanation, sessionActive = activeSession != null)
     }
 
     companion object {

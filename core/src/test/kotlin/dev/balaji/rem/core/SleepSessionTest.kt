@@ -32,4 +32,18 @@ class SleepSessionTest {
         assertEquals(toronto("2026-01-14T23:15"), withSeconds.sleepOnset(RemSettings()))
         assertEquals(start, withSeconds.sleepOnset(RemSettings(fallAsleepMinutes = 0)))
     }
+
+    @Test
+    fun `an accepted late option keeps the session active for the late window`() {
+        val accepted = session.copy(acceptedLate = setOf(4L))
+        val end = start.plus(Duration.ofHours(16))
+
+        assertTrue(accepted.acceptsLate(4))
+        assertFalse(accepted.acceptsLate(5))
+        assertTrue(accepted.isActive(end))
+        assertTrue(accepted.isActive(end.plus(LATE_WINDOW).minusSeconds(1)))
+        assertFalse(accepted.isActive(end.plus(LATE_WINDOW)))
+        assertFalse("coverage itself does not grow", accepted.covers(end.plusSeconds(1)))
+    }
 }
+

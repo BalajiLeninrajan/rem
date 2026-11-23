@@ -47,7 +47,7 @@ enum class DismissResult {
  *   rang, and ends the sleep session if it covers the ring's deadline,
  * - on the time limit, posts a missed-alarm notification. If the deadline is still ahead
  *   the alarm stays on and its fired record is removed, so it rings again at the
- *   deadline. Otherwise a one-shot alarm is disabled,
+ *   deadline. Otherwise, which includes every late ring, a one-shot alarm is disabled,
  * - reschedules.
  *
  * A ring of the test alarm ([dev.balaji.rem.schedule.AlarmBroadcast.TEST_ALARM_ID]) has no
@@ -64,7 +64,8 @@ interface RingController {
      * If the alarm no longer exists or is disabled the service stops without ringing.
      * A second alarm that fires during a ring does not restart anything and the current
      * ring goes on. If the second alarm's deadline has passed, a missed-alarm notification
-     * is posted for it and it is disabled if it is one-shot.
+     * is posted for it and it is disabled if it is one-shot. That always holds for a late
+     * ring (an accepted late option), which comes after its deadline.
      *
      * @return true when [ring] is ringing now, or was already. False when it got no ring:
      *   another alarm is ringing or the service could not start. The receiver then records
