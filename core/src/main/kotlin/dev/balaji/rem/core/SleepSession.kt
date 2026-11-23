@@ -7,16 +7,17 @@ import java.time.temporal.ChronoUnit
 /**
  * Started when the user presses "going to sleep". At most one exists at a time.
  *
- * @property acceptedLate ids of the alarms whose [LateOption] the user accepted in this
- *   session. Their covered occurrence rings at the first cycle boundary after the deadline
- *   instead of at the deadline. Cleared when the session ends.
+ * @property acceptedLate alarm id to the deadline of the occurrence whose [LateOption] the
+ *   user accepted in this session. That occurrence rings at the first cycle boundary after
+ *   its deadline instead of at the deadline. The consent holds for that deadline only, so an
+ *   alarm edited to another time rings by the normal rule again. Cleared when the session ends.
  */
-data class SleepSession(val startedAt: Instant, val acceptedLate: Set<Long> = emptySet()) {
+data class SleepSession(val startedAt: Instant, val acceptedLate: Map<Long, Instant> = emptyMap()) {
 
     /** A session shapes the ring time of deadlines after its start and up to 16 hours later. */
     fun covers(deadline: Instant): Boolean = deadline > startedAt && deadline <= startedAt.plus(MAX_COVERAGE)
 
-    fun acceptsLate(alarmId: Long): Boolean = alarmId in acceptedLate
+    fun acceptsLate(alarmId: Long, deadline: Instant): Boolean = acceptedLate[alarmId] == deadline
 
     /**
      * False once the session can no longer shape any ring. Such a session should be ended.

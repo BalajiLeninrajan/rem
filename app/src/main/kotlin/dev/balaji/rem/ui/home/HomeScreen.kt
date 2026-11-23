@@ -128,7 +128,9 @@ fun HomeScreen(
         onDeleteAlarm = viewModel::delete,
         onGoToSleep = viewModel::goToSleep,
         onEndSleep = viewModel::endSleep,
-        onLateChange = { alarmId, accept -> if (accept) viewModel.acceptLate(alarmId) else viewModel.revokeLate(alarmId) },
+        onLateChange = { alarmId, deadline, accept ->
+            if (accept) viewModel.acceptLate(alarmId, deadline) else viewModel.revokeLate(alarmId, deadline)
+        },
         onLateChoice = viewModel::setLateChoice,
         onConfirmLatePrompt = viewModel::confirmLatePrompt,
         onDismissLatePrompt = viewModel::dismissLatePrompt,
@@ -150,7 +152,7 @@ fun HomeContent(
     onDeleteAlarm: (alarmId: Long) -> Unit,
     onGoToSleep: () -> Unit,
     onEndSleep: () -> Unit,
-    onLateChange: (alarmId: Long, accept: Boolean) -> Unit,
+    onLateChange: (alarmId: Long, deadline: Instant, accept: Boolean) -> Unit,
     onLateChoice: (alarmId: Long, accept: Boolean) -> Unit,
     onConfirmLatePrompt: () -> Unit,
     onDismissLatePrompt: () -> Unit,
@@ -266,7 +268,7 @@ private fun AlarmList(
     onDuplicateAlarm: (alarmId: Long) -> Unit,
     onEnabledChange: (alarmId: Long, enabled: Boolean) -> Unit,
     onDeleteAlarm: (alarmId: Long) -> Unit,
-    onLateChange: (alarmId: Long, accept: Boolean) -> Unit,
+    onLateChange: (alarmId: Long, deadline: Instant, accept: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -290,7 +292,7 @@ private fun AlarmList(
                 onEnabledChange = { enabled -> onEnabledChange(row.alarm.id, enabled) },
                 onDuplicate = { onDuplicateAlarm(row.alarm.id) },
                 onDelete = { onDeleteAlarm(row.alarm.id) },
-                onLateChange = { accept -> onLateChange(row.alarm.id, accept) },
+                onLateChange = { deadline, accept -> onLateChange(row.alarm.id, deadline, accept) },
             )
         }
     }
@@ -356,7 +358,7 @@ private fun HomePreviewContent(state: HomeUiState) {
             onDeleteAlarm = {},
             onGoToSleep = {},
             onEndSleep = {},
-            onLateChange = { _, _ -> },
+            onLateChange = { _, _, _ -> },
             onLateChoice = { _, _ -> },
             onConfirmLatePrompt = {},
             onDismissLatePrompt = {},

@@ -14,9 +14,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /**
- * The start is one long key. The alarm ids whose late option was accepted are a string set
- * next to it, and an entry that is not a number is ignored. Both keys go together: [start]
- * and [end] write them in one edit.
+ * The start is one long key. The accepted late options are a string set next to it, one
+ * "alarmId:deadlineMillis" entry per alarm, and an entry that does not parse is ignored.
+ * Both keys go together: [start] and [end] write them in one edit.
  */
 class DataStoreSleepSessionRepository(private val store: DataStore<Preferences>) : SleepSessionRepository {
     override val session: Flow<SleepSession?> = store.data.map { it.toSession() }.distinctUntilChanged()
@@ -33,15 +33,17 @@ class DataStoreSleepSessionRepository(private val store: DataStore<Preferences>)
         return SleepSession(Instant.ofEpochMilli(millis))
     }
 
-    override suspend fun acceptLate(alarmId: Long) {
+    override suspend fun acceptLate(alarmId: Long, deadline: Instant) {
         store.edit {
-            if (it[STARTED_AT] != null) it[LATE_ACCEPTED] = it[LATE_ACCEPTED].orEmpty() + alarmId.toString()
+            if (it[STARTED_AT] != null) {
+                it[LATE_ACCEPTED] = it[LATE_ACCEPTED].orEmpty().withoutAlarm(alarmId) + "$alarmId:${deadline.toEpochMilli()}"
+            }
         }
     }
 
     override suspend fun revokeLate(alarmId: Long) {
         store.edit {
-            val left = it[LATE_ACCEPTED].orEmpty() - alarmId.toString()
+            val left = it[LATE_ACCEPTED].orEmpty().withoutAlarm(alarmId)
             if (left.isEmpty()) it.remove(LATE_ACCEPTED) else it[LATE_ACCEPTED] = left
         }
     }
@@ -55,11 +57,19 @@ class DataStoreSleepSessionRepository(private val store: DataStore<Preferences>)
 
     private companion object {
         val STARTED_AT = longPreferencesKey("started_at_ms")
-        val LATE_ACCEPTED = stringSetPreferencesKey("late_accepted_alarm_ids")
+        val LATE_ACCEPTED = stringSetPreferencesKey("late_accepted_occurrences")
+
+        fun parse(entry: String): Pair<Long, Instant>? {
+            val alarmId = entry.substringBefore(':').toLongOrNull() ?: return null
+            val millis = entry.substringAfter(':', "").toLongOrNull() ?: return null
+            return alarmId to Instant.ofEpochMilli(millis)
+        }
+
+        fun Set<String>.withoutAlarm(alarmId: Long): Set<String> = filterTo(mutableSetOf()) { parse(it)?.first != alarmId }
 
         fun Preferences.toSession(): SleepSession? {
             val startedAt = this[STARTED_AT] ?: return null
-            val accepted = this[LATE_ACCEPTED].orEmpty().mapNotNullTo(mutableSetOf()) { it.toLongOrNull() }
+            val accepted = this[LATE_ACCEPTED].orEmpty().mapNotNull(::parse).toMap()
             return SleepSession(Instant.ofEpochMilli(startedAt), accepted)
         }
     }

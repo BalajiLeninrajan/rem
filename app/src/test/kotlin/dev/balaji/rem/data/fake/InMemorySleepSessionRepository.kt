@@ -16,8 +16,8 @@ class InMemorySleepSessionRepository(initial: SleepSession? = null) : SleepSessi
 
     override suspend fun start(startedAt: Instant): SleepSession = SleepSession(startedAt).also { state.value = it }
 
-    override suspend fun acceptLate(alarmId: Long) {
-        state.update { it?.copy(acceptedLate = it.acceptedLate + alarmId) }
+    override suspend fun acceptLate(alarmId: Long, deadline: Instant) {
+        state.update { it?.copy(acceptedLate = it.acceptedLate + (alarmId to deadline)) }
     }
 
     override suspend fun revokeLate(alarmId: Long) {

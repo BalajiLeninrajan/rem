@@ -912,7 +912,7 @@ class DefaultRingControllerTest {
         val late = ScheduledRing(alarmId, ringAt = deadline.plusSeconds(15 * 60), deadline = deadline)
         clock.now = late.ringAt
         sessions.start(deadline.minusSeconds(6 * 3600))
-        sessions.acceptLate(alarmId)
+        sessions.acceptLate(alarmId, deadline)
         // The receiver records the fire as the ring starts.
         ringState.markFired(alarmId, deadline)
         return late

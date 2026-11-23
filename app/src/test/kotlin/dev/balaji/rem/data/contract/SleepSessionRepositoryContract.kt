@@ -15,6 +15,8 @@ abstract class SleepSessionRepositoryContract {
     abstract fun createRepository(): SleepSessionRepository
 
     private val evening = Instant.parse("2026-01-15T04:00:00Z")
+    private val six = Instant.parse("2026-01-15T11:00:00Z")
+    private val seven = Instant.parse("2026-01-15T12:00:00Z")
 
     @Test
     fun `no session at first`() = runTest {
@@ -58,30 +60,41 @@ abstract class SleepSessionRepositoryContract {
     }
 
     @Test
-    fun `accepting a late option adds the alarm to the active session`() = runTest {
+    fun `accepting a late option adds the occurrence to the active session`() = runTest {
         val repository = createRepository()
         repository.start(evening)
 
-        repository.acceptLate(3)
-        repository.acceptLate(5)
-        repository.acceptLate(3)
+        repository.acceptLate(3, six)
+        repository.acceptLate(5, seven)
+        repository.acceptLate(3, six)
 
-        assertEquals(SleepSession(evening, setOf(3L, 5L)), repository.current())
+        assertEquals(SleepSession(evening, mapOf(3L to six, 5L to seven)), repository.current())
         assertEquals(repository.current(), repository.session.first())
-        assertTrue(repository.current()!!.acceptsLate(3))
+        assertTrue(repository.current()!!.acceptsLate(3, six))
+    }
+
+    @Test
+    fun `accepting again for another deadline replaces the earlier one`() = runTest {
+        val repository = createRepository()
+        repository.start(evening)
+        repository.acceptLate(3, six)
+
+        repository.acceptLate(3, seven)
+
+        assertEquals(SleepSession(evening, mapOf(3L to seven)), repository.current())
     }
 
     @Test
     fun `revoking a late option takes only that alarm back`() = runTest {
         val repository = createRepository()
         repository.start(evening)
-        repository.acceptLate(3)
-        repository.acceptLate(5)
+        repository.acceptLate(3, six)
+        repository.acceptLate(5, six)
 
         repository.revokeLate(3)
         repository.revokeLate(9)
 
-        assertEquals(SleepSession(evening, setOf(5L)), repository.current())
+        assertEquals(SleepSession(evening, mapOf(5L to six)), repository.current())
 
         repository.revokeLate(5)
 
@@ -92,7 +105,7 @@ abstract class SleepSessionRepositoryContract {
     fun `a late option cannot be accepted without a session`() = runTest {
         val repository = createRepository()
 
-        repository.acceptLate(3)
+        repository.acceptLate(3, six)
         repository.revokeLate(3)
 
         assertNull(repository.current())
@@ -104,14 +117,14 @@ abstract class SleepSessionRepositoryContract {
     fun `ending or starting a session forgets the accepted late options`() = runTest {
         val repository = createRepository()
         repository.start(evening)
-        repository.acceptLate(3)
+        repository.acceptLate(3, six)
 
         repository.end()
         repository.start(evening)
 
-        assertEquals(emptySet<Long>(), repository.current()?.acceptedLate)
+        assertEquals(emptyMap<Long, Instant>(), repository.current()?.acceptedLate)
 
-        repository.acceptLate(3)
+        repository.acceptLate(3, six)
         repository.start(evening.plusSeconds(600))
 
         assertEquals(SleepSession(evening.plusSeconds(600)), repository.current())

@@ -69,7 +69,7 @@ fun AlarmCard(
     onEnabledChange: (Boolean) -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
-    onLateChange: (accept: Boolean) -> Unit,
+    onLateChange: (deadline: Instant, accept: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val alarm = row.alarm
@@ -103,7 +103,7 @@ fun AlarmCard(
                 val ring = row.nextRing
                 if (late != null && ring != null) {
                     TextButton(
-                        onClick = { onLateChange(!late.accepted) },
+                        onClick = { onLateChange(ring.deadline, !late.accepted) },
                         contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
                         modifier = Modifier.offset(x = (-12).dp),
                     ) {
@@ -218,7 +218,7 @@ private fun AlarmCardPreview() {
             onEnabledChange = {},
             onDuplicate = {},
             onDelete = {},
-            onLateChange = {},
+            onLateChange = { _, _ -> },
         )
     }
 }

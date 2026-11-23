@@ -372,7 +372,7 @@ class HomeViewModelTest {
         replan()
 
         assertNull(viewModel.state.value.latePrompt)
-        assertEquals(emptySet<Long>(), sessions.current()?.acceptedLate)
+        assertEquals(emptyMap<Long, Instant>(), sessions.current()?.acceptedLate)
         val ring = viewModel.state.value.alarms.first { it.alarm.id == late }.nextRing!!
         assertEquals(at("2026-01-15T06:30"), ring.ringAt)
         assertEquals(WakeExplanation.AtDeadline(DeadlineReason.NO_CYCLE_IN_WINDOW), ring.explanation)
@@ -397,7 +397,7 @@ class HomeViewModelTest {
         viewModel.confirmLatePrompt()
         replan()
 
-        assertEquals(setOf(first), sessions.current()?.acceptedLate)
+        assertEquals(mapOf(first to at("2026-01-15T06:30")), sessions.current()?.acceptedLate)
         val state = viewModel.state.value
         val ring = state.alarms.first { it.alarm.id == first }.nextRing!!
         assertEquals(at("2026-01-15T06:45"), ring.ringAt)
@@ -420,7 +420,7 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertNull(viewModel.state.value.latePrompt)
-        assertEquals(emptySet<Long>(), sessions.current()?.acceptedLate)
+        assertEquals(emptyMap<Long, Instant>(), sessions.current()?.acceptedLate)
     }
 
     @Test
@@ -452,7 +452,7 @@ class HomeViewModelTest {
         viewModel.confirmLatePrompt()
         advanceUntilIdle()
 
-        assertEquals(emptySet<Long>(), sessions.current()?.acceptedLate)
+        assertEquals(emptyMap<Long, Instant>(), sessions.current()?.acceptedLate)
     }
 
     @Test
@@ -499,18 +499,45 @@ class HomeViewModelTest {
         replan()
         assertEquals(LateSwitch(lateOption, accepted = false), viewModel.state.value.alarms.single().late)
 
-        viewModel.acceptLate(id)
+        viewModel.acceptLate(id, at("2026-01-15T06:30"))
         replan()
         val accepted = viewModel.state.value.alarms.single()
         assertEquals(LateSwitch(lateOption, accepted = true), accepted.late)
         assertEquals(at("2026-01-15T06:45"), accepted.nextRing?.ringAt)
 
-        viewModel.revokeLate(id)
+        viewModel.revokeLate(id, at("2026-01-15T06:30"))
         replan()
         val back = viewModel.state.value.alarms.single()
         assertEquals(LateSwitch(lateOption, accepted = false), back.late)
         assertEquals(at("2026-01-15T06:30"), back.nextRing?.ringAt)
-        assertEquals(emptySet<Long>(), sessions.current()?.acceptedLate)
+        assertEquals(emptyMap<Long, Instant>(), sessions.current()?.acceptedLate)
+    }
+
+    @Test
+    fun `after the deadline the card no longer offers the way back, and a late tap changes nothing`() = runTest {
+        val viewModel = viewModel()
+        val id = alarms.upsert(Alarm(time = LocalTime.of(6, 30)))
+        sessions.start(clock.instant())
+        replan()
+        viewModel.acceptLate(id, at("2026-01-15T06:30"))
+        replan()
+        assertEquals(true, viewModel.state.value.alarms.single().late?.accepted)
+
+        // Between the 06:30 deadline and the 06:45 late ring.
+        clock.now = at("2026-01-15T06:35")
+        viewModel.refresh(SystemChecks())
+        replan()
+
+        val row = viewModel.state.value.alarms.single()
+        assertNull(row.late)
+        assertEquals(at("2026-01-15T06:45"), row.nextRing?.ringAt)
+
+        // A card drawn before the clock passed the deadline can still send the tap.
+        viewModel.revokeLate(id, at("2026-01-15T06:30"))
+        replan()
+
+        assertEquals(mapOf(id to at("2026-01-15T06:30")), sessions.current()?.acceptedLate)
+        assertEquals(at("2026-01-15T06:45"), viewModel.state.value.alarms.single().nextRing?.ringAt)
     }
 
     @Test

@@ -152,7 +152,7 @@ class HomeViewModel(
         if (prompt.accepted.isEmpty()) return
         viewModelScope.launch {
             if (sessions.current()?.startedAt != prompt.startedAt) return@launch
-            prompt.accepted.forEach { sessions.acceptLate(it) }
+            prompt.offers.filter { it.alarmId in prompt.accepted }.forEach { sessions.acceptLate(it.alarmId, it.deadline) }
         }
     }
 
@@ -161,13 +161,21 @@ class HomeViewModel(
         latePrompt.value = null
     }
 
-    /** The card's "ring at ... instead". */
-    fun acceptLate(alarmId: Long) {
-        viewModelScope.launch { sessions.acceptLate(alarmId) }
+    /**
+     * The card's "ring at ... instead" for the occurrence due at [deadline]. Ignored once
+     * [deadline] has passed, as the card may not have caught up with the clock yet.
+     */
+    fun acceptLate(alarmId: Long, deadline: Instant) {
+        if (deadline <= clock.instant()) return
+        viewModelScope.launch { sessions.acceptLate(alarmId, deadline) }
     }
 
-    /** The card's way back to the alarm time. */
-    fun revokeLate(alarmId: Long) {
+    /**
+     * The card's way back to the alarm time [deadline]. Ignored once [deadline] has passed:
+     * going back then would ring the alarm at once.
+     */
+    fun revokeLate(alarmId: Long, deadline: Instant) {
+        if (deadline <= clock.instant()) return
         viewModelScope.launch { sessions.revokeLate(alarmId) }
     }
 
@@ -188,7 +196,7 @@ class HomeViewModel(
                     nextRing = nextRing,
                     ringing = ringing,
                     noBarcode = stored.barcodes[alarm.id].isNullOrEmpty(),
-                    late = if (ringing) null else nextRing?.lateSwitch(session),
+                    late = if (ringing) null else nextRing?.lateSwitch(session, live.now),
                 )
             },
             sleep = when {
@@ -240,12 +248,13 @@ class HomeViewModel(
 }
 
 /**
- * The card's late switch for this ring, while [session] covers it. A ring that uses its late
- * option has a [WakeExplanation.LateCycles] explanation.
+ * The card's late switch for this ring, while [session] covers it and its deadline is ahead.
+ * A ring that uses its late option has a [WakeExplanation.LateCycles] explanation. After the
+ * deadline there is no switch: going back to the alarm time would ring at once.
  */
-private fun PlannedRing.lateSwitch(session: SleepSession?): LateSwitch? {
+private fun PlannedRing.lateSwitch(session: SleepSession?, now: Instant): LateSwitch? {
     val option = late ?: return null
-    if (session == null || !session.covers(deadline)) return null
+    if (session == null || !session.covers(deadline) || deadline <= now) return null
     return LateSwitch(option, accepted = explanation is WakeExplanation.LateCycles)
 }
 

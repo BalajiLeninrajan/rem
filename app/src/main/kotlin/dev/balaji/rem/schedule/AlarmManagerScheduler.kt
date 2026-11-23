@@ -62,7 +62,8 @@ class AlarmManagerScheduler(
         // Reschedule triggers: the scheduler watches the repositories, the repositories do
         // not know the scheduler exists. The dependency points one way, so there is no
         // cycle, and a new writer cannot forget to reschedule. The scheduler's own writes
-        // (ending a stale session, disabling a missed one-shot alarm) come back through
+        // (ending a stale session, disabling a missed one-shot alarm, dropping the late
+        // consent of a switched-off alarm) come back through
         // these flows and cause one more run, which finds nothing left to change.
         // The ringing record is watched because a one-shot alarm leaves the plan while it rings.
         scope.launch {
@@ -88,7 +89,7 @@ class AlarmManagerScheduler(
             // write that fails, for example on a full disk, cannot keep the alarms from being set.
             bookkeeping("in-flight wait") { awaitRingInFlight() }
             val now = clock.instant()
-            val session = activeSession(now)
+            val activeSession = activeSession(now)
             val ringing = readOr(null) { ringState.currentRinging() }
             val fired = firedRecords(now)
             val previous = readOr(emptyList()) { ringState.scheduled() }
@@ -104,6 +105,7 @@ class AlarmManagerScheduler(
             // A switched-off alarm needs no fired record. Without one, switching it back on plans its next real occurrence.
             val enabledIds = stored.filter { it.enabled }.mapTo(mutableSetOf()) { it.id }
             bookkeeping("fired cleanup") { ringState.retainFired(enabledIds) }
+            val session = activeSession?.let { withoutLateConsentOf(it, it.acceptedLate.keys - enabledIds) }
             // A one-shot alarm that is ringing has no next occurrence. The ring disables it when it ends.
             // Once it has been edited to another time it is a new occurrence and is planned like any other.
             val candidates = stored.filterNot { alarm ->
@@ -174,6 +176,17 @@ class AlarmManagerScheduler(
      */
     private fun Alarm.isOccurrence(alarmId: Long, deadline: Instant): Boolean =
         id == alarmId && hasOccurrenceAt(deadline, clock.zone)
+
+    /**
+     * Consent to a late ring ends when its alarm is switched off or deleted. Switching the
+     * alarm back on between the deadline and the late ring would otherwise bring that ring
+     * back, where it should plan its next real occurrence. Returns the session without them.
+     */
+    private suspend fun withoutLateConsentOf(session: SleepSession, alarmIds: Set<Long>): SleepSession {
+        if (alarmIds.isEmpty()) return session
+        alarmIds.forEach { bookkeeping("late consent cleanup") { sessions.revokeLate(it) } }
+        return session.copy(acceptedLate = session.acceptedLate - alarmIds)
+    }
 
     /** A session that cannot be read or ended counts as none, so the alarms ring at their deadlines. */
     private suspend fun activeSession(now: Instant): SleepSession? {

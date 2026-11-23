@@ -176,8 +176,8 @@ class SchedulePlanTest {
     private val six = Alarm(id = 7, time = LocalTime.of(6, 0), repeatDays = RepeatDays.EVERY_DAY)
     private val sixOnce = Alarm(id = 8, time = LocalTime.of(6, 0))
     private val midnight = SleepSession(toronto("2026-01-15T00:00"))
-    private val accepted = midnight.copy(acceptedLate = setOf(7L, 8L))
     private val sixDeadline = toronto("2026-01-15T06:00")
+    private val accepted = midnight.copy(acceptedLate = mapOf(7L to sixDeadline, 8L to sixDeadline))
     private val lateOption = LateOption(toronto("2026-01-15T06:15"), 4, 15)
     private val lateRing = PlannedRing(7, lateOption.ringAt, sixDeadline, LateCycles(4, 15), lateOption)
 
@@ -196,7 +196,7 @@ class SchedulePlanTest {
         val plan = planSchedule(listOf(six, seven), accepted, settings, clockAt("2026-01-15T00:00"))
 
         assertEquals(lateRing, plan.forAlarm(7))
-        // Acceptance is per alarm. 07:00 is not in the accepted set, and its next boundary, 07:45, is too late anyway.
+        // Acceptance is per alarm. 07:00 is not accepted, and its next boundary, 07:45, is too late anyway.
         assertEquals(
             PlannedRing(1, toronto("2026-01-15T07:00"), toronto("2026-01-15T07:00"), AtDeadline(DeadlineReason.NO_CYCLE_IN_WINDOW)),
             plan.forAlarm(1),
@@ -294,11 +294,51 @@ class SchedulePlanTest {
     }
 
     @Test
-    fun `a late ring whose setting now puts it in the past is overdue, not moved`() {
-        // Onset 00:05 makes the late boundary 06:05, which has passed at 06:10.
+    fun `an owed late ring that a setting moved into the past rings at once`() {
+        // Onset 00:05 makes the late boundary 06:05, which has passed at 06:10. The 06:15 ring is still owed.
+        val ring = planSchedule(
+            listOf(six), accepted, RemSettings(fallAsleepMinutes = 5), clockAt("2026-01-15T06:10"),
+            previous = listOf(lateRing.toScheduledRing()),
+        ).forAlarm(7)
+
+        assertEquals(toronto("2026-01-15T06:10"), ring?.ringAt)
+        assertEquals(sixDeadline, ring?.deadline)
+    }
+
+    @Test
+    fun `without the previous rings a late ring that a setting moved into the past is dropped`() {
+        // Only a failed read of the persisted rings gets here. The boundary 06:05 has passed at 06:10.
         val plan = planSchedule(listOf(six), accepted, RemSettings(fallAsleepMinutes = 5), clockAt("2026-01-15T06:10"))
 
         assertEquals(toronto("2026-01-16T06:00"), plan.forAlarm(7)?.deadline)
+    }
+
+    @Test
+    fun `consent covers the accepted deadline only, not an alarm edited to another time`() {
+        // Boundaries 04:45, 06:15 and 07:45. 07:20 would get 07:45 and 05:50 would get 06:15 if consent followed the id.
+        for (time in listOf(LocalTime.of(7, 20), LocalTime.of(5, 50))) {
+            val edited = six.copy(time = time)
+            val deadline = toronto("2026-01-15T$time")
+
+            val ring = planSchedule(listOf(edited), accepted, settings, clockAt("2026-01-15T00:00")).forAlarm(7)!!
+
+            assertEquals("$time", deadline, ring.ringAt)
+            assertEquals("$time", AtDeadline(DeadlineReason.NO_CYCLE_IN_WINDOW), ring.explanation)
+            assertTrue("$time still offers its own option", ring.late != null)
+            // Not even between the edited deadline and its boundary.
+            val after = planSchedule(listOf(edited), accepted, settings, java.time.Clock.fixed(deadline.plusSeconds(60), TORONTO))
+            assertEquals("$time", deadline.plus(Duration.ofDays(1)), after.forAlarm(7)?.deadline)
+        }
+    }
+
+    @Test
+    fun `consent for one occurrence does not move a later one`() {
+        val tomorrow = toronto("2026-01-16T06:00")
+        val session = SleepSession(toronto("2026-01-16T00:00"), mapOf(7L to sixDeadline))
+
+        val ring = planSchedule(listOf(six), session, settings, clockAt("2026-01-16T00:00")).forAlarm(7)!!
+
+        assertEquals(tomorrow, ring.ringAt)
     }
 
     @Test
@@ -331,7 +371,8 @@ class SchedulePlanTest {
         val owed = listOf(lateRing.toScheduledRing(), lateRing.toScheduledRing().copy(alarmId = 8))
         var start = toronto("2026-01-14T22:00")
         while (start < toronto("2026-01-15T06:30")) {
-            val session = SleepSession(start, setOf(7L, 8L, 1L, 2L))
+            val deadlines = listOf(six, sixOnce, seven, eight).associate { it.id to it.nextDeadline(start, TORONTO) }
+            val session = SleepSession(start, deadlines)
             var now = start
             while (now < toronto("2026-01-15T09:00")) {
                 for (previous in listOf(emptyList(), owed)) {

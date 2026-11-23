@@ -35,11 +35,13 @@ class SleepSessionTest {
 
     @Test
     fun `an accepted late option keeps the session active for the late window`() {
-        val accepted = session.copy(acceptedLate = setOf(4L))
+        val deadline = toronto("2026-01-15T06:00")
+        val accepted = session.copy(acceptedLate = mapOf(4L to deadline))
         val end = start.plus(Duration.ofHours(16))
 
-        assertTrue(accepted.acceptsLate(4))
-        assertFalse(accepted.acceptsLate(5))
+        assertTrue(accepted.acceptsLate(4, deadline))
+        assertFalse("another alarm", accepted.acceptsLate(5, deadline))
+        assertFalse("another deadline", accepted.acceptsLate(4, deadline.plusSeconds(60)))
         assertTrue(accepted.isActive(end))
         assertTrue(accepted.isActive(end.plus(LATE_WINDOW).minusSeconds(1)))
         assertFalse(accepted.isActive(end.plus(LATE_WINDOW)))

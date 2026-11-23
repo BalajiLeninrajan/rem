@@ -33,13 +33,14 @@ class DataStoreSleepSessionRepositoryTest : SleepSessionRepositoryContract() {
         val file = stores.newStoreFile()
         val before = DataStoreSleepSessionRepository(stores.open(file))
         before.start(Instant.parse("2026-01-15T04:00:00Z"))
-        before.acceptLate(3)
-        before.acceptLate(Long.MAX_VALUE)
+        val six = Instant.parse("2026-01-15T11:00:00Z")
+        before.acceptLate(3, six)
+        before.acceptLate(Long.MAX_VALUE, six.plusSeconds(1800))
         stores.close(file)
 
         val after = DataStoreSleepSessionRepository(stores.open(file))
 
-        assertEquals(setOf(3L, Long.MAX_VALUE), after.current()?.acceptedLate)
+        assertEquals(mapOf(3L to six, Long.MAX_VALUE to six.plusSeconds(1800)), after.current()?.acceptedLate)
     }
 }
 

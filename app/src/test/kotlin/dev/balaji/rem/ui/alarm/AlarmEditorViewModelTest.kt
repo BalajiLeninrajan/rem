@@ -432,7 +432,7 @@ class AlarmEditorViewModelTest {
         clock.now = at("2026-01-15T00:00")
         val id = alarms.upsert(Alarm(time = LocalTime.of(6, 0)))
         sessions.start(clock.instant())
-        sessions.acceptLate(id)
+        sessions.acceptLate(id, at("2026-01-15T06:00"))
         val editor = editor(id)
 
         val preview = editor.state.value.preview!!
@@ -445,5 +445,20 @@ class AlarmEditorViewModelTest {
         assertEquals(at("2026-01-15T06:15"), editor.state.value.preview?.ringAt)
         assertEquals(at("2026-01-15T06:00"), editor.state.value.preview?.deadline)
     }
-}
 
+    @Test
+    fun `an accepted late option does not carry over to a new time in the draft or after saving`() = runTest {
+        clock.now = at("2026-01-15T00:00")
+        val id = alarms.upsert(Alarm(time = LocalTime.of(6, 0)))
+        sessions.start(clock.instant())
+        sessions.acceptLate(id, at("2026-01-15T06:00"))
+        val editor = editor(id)
+
+        // 06:15 is 25 minutes after 05:50, inside the late window, but the consent was for 06:00.
+        editor.setTime(LocalTime.of(5, 50))
+        advanceUntilIdle()
+
+        assertEquals(at("2026-01-15T05:50"), editor.state.value.preview?.ringAt)
+        assertTrue(editor.state.value.preview?.explanation is WakeExplanation.AtDeadline)
+    }
+}

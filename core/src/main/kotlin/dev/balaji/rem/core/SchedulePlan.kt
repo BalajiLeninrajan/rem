@@ -82,10 +82,10 @@ fun planSchedule(
  *
  * A late ring rings after its deadline, so between the deadline and the late ring the next
  * deadline is already the following one. The occurrence is kept there instead:
- * - With the alarm's late option accepted in [session], an occurrence whose deadline passed
- *   less than [LATE_WINDOW] ago, that has not fired and whose late ring is still ahead is
- *   planned at its late ring. This needs nothing persisted beyond the session, so it
- *   survives a process death or a reboot.
+ * - The occurrence whose late option [session] accepted for this alarm is planned at its late
+ *   ring while its deadline has passed, it has not fired and the late ring is still ahead.
+ *   This needs nothing persisted beyond the session, so it survives a process death or a
+ *   reboot. The consent names the deadline, so it does not carry over to an edited time.
  * - A late ring in [previous] whose deadline has passed, that has not fired and whose ring
  *   time is still ahead is owed. If it is no longer accepted or no longer late (the session
  *   ended or changed, the option was revoked, a setting moved the boundary), it falls back
@@ -103,19 +103,17 @@ fun planRing(
     fired: Instant? = null,
     previous: Collection<ScheduledRing> = emptyList(),
 ): PlannedRing {
-    val accepted = session?.acceptsLate(alarm.id) == true
+    fun accepts(deadline: Instant) = session?.acceptsLate(alarm.id, deadline) == true
     fun ring(deadline: Instant, wake: WakeTime) = PlannedRing(alarm.id, wake.ringAt, deadline, wake.explanation, wake.late)
 
     fun open(deadline: Instant): Boolean =
         deadline <= now && (fired == null || fired < deadline) && alarm.hasOccurrenceAt(deadline, zone)
 
-    if (accepted) {
-        val recent = alarm.nextDeadline(now.minus(LATE_WINDOW), zone)
-        if (open(recent)) {
-            val wake = computeWakeTime(recent, session, settings, now, acceptLate = true)
-            val late = wake.late
-            if (wake.explanation is WakeExplanation.LateCycles && late != null && late.ringAt > now) return ring(recent, wake)
-        }
+    val acceptedDeadline = session?.acceptedLate?.get(alarm.id)
+    if (acceptedDeadline != null && open(acceptedDeadline)) {
+        val wake = computeWakeTime(acceptedDeadline, session, settings, now, acceptLate = true)
+        val late = wake.late
+        if (wake.explanation is WakeExplanation.LateCycles && late != null && late.ringAt > now) return ring(acceptedDeadline, wake)
     }
 
     val owed = previous
@@ -124,12 +122,12 @@ fun planRing(
         .maxByOrNull { it.deadline }
     if (owed != null) {
         // Never before now, and now is before the owed ring time, so still inside the late window.
-        return ring(owed.deadline, computeWakeTime(owed.deadline, session, settings, now, accepted))
+        return ring(owed.deadline, computeWakeTime(owed.deadline, session, settings, now, accepts(owed.deadline)))
     }
 
     val after = if (fired != null && fired > now) fired else now
     val deadline = alarm.nextDeadline(after, zone)
-    return ring(deadline, computeWakeTime(deadline, session, settings, now, accepted))
+    return ring(deadline, computeWakeTime(deadline, session, settings, now, accepts(deadline)))
 }
 
 /**
