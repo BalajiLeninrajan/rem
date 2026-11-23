@@ -60,10 +60,16 @@ internal class RingNotifications(private val context: Context) : AlarmNotifier {
     }
 
     /**
-     * The ongoing notification of the ringing service. Its tap, its full-screen intent and
-     * its one action all open the ringing screen. Nothing on it stops the alarm.
+     * The ongoing notification of the ringing service. Its tap and its full-screen intent
+     * open the ringing screen. Until the alarm is loaded it counts as needing a barcode, so
+     * the only action is "Scan to dismiss", which opens the ringing screen too.
+     *
+     * Once the alarm is loaded ([ring] is not null) the actions follow it: Snooze while
+     * snoozes are left, then "Scan to dismiss" for an alarm with barcodes, or Dismiss for
+     * one without. Snooze and Dismiss act through [RingActionReceiver] without opening
+     * anything.
      */
-    fun ringing(label: String, startedAt: Instant?): Notification {
+    fun ringing(label: String, startedAt: Instant?, ring: RingSpec? = null): Notification {
         val open = PendingIntent.getActivity(
             context,
             0,
@@ -93,7 +99,17 @@ internal class RingNotifications(private val context: Context) : AlarmNotifier {
             .setContentIntent(open)
             .setFullScreenIntent(open, true)
             .setDeleteIntent(swipedAway)
-            .addAction(0, context.getString(R.string.ring_action_scan), open)
+            .apply {
+                if (ring != null && ring.snoozesLeft > 0) {
+                    val snooze = broadcast(RingContract.ACTION_SNOOZE, ring.alarmId)
+                    addAction(0, context.getString(R.string.ring_action_snooze, ring.snoozeMinutes), snooze)
+                }
+                if (ring != null && !ring.requiresBarcode) {
+                    addAction(0, context.getString(R.string.ring_action_dismiss), broadcast(RingContract.ACTION_DISMISS, ring.alarmId))
+                } else {
+                    addAction(0, context.getString(R.string.ring_action_scan), open)
+                }
+            }
             .build()
     }
 
@@ -122,6 +138,15 @@ internal class RingNotifications(private val context: Context) : AlarmNotifier {
             .setContentIntent(open)
             .build()
     }
+
+    /** The PendingIntent of a notification action that [RingActionReceiver] carries out. */
+    private fun broadcast(action: String, alarmId: Long): PendingIntent =
+        PendingIntent.getBroadcast(
+            context,
+            0,
+            RingContract.actionIntent(context, action, alarmId),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
 
     fun postRinging(notification: Notification) {
         manager.notify(RingContract.NOTIFICATION_ID_RINGING, notification)

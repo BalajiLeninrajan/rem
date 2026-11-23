@@ -92,6 +92,12 @@
             android:directBootAware="true"
             android:exported="false" />
 
+        <!-- The Snooze and Dismiss actions of the ringing notification. Explicit intents only. -->
+        <receiver
+            android:name=".ring.RingActionReceiver"
+            android:directBootAware="true"
+            android:exported="false" />
+
         <!-- Every event after which AlarmManager may no longer hold the right alarms. -->
         <receiver
             android:name=".schedule.RescheduleReceiver"

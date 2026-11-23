@@ -56,6 +56,7 @@ import dev.balaji.rem.ring.RingContract
 import dev.balaji.rem.ui.components.CenteredContent
 import dev.balaji.rem.ui.components.WarningBanner
 import dev.balaji.rem.ui.components.WhileResumed
+import dev.balaji.rem.ui.format.clockText
 import dev.balaji.rem.ui.system.readSystemChecks
 import dev.balaji.rem.ui.theme.RemTheme
 import java.time.Instant
@@ -226,7 +227,7 @@ fun HomeContent(
 
 /** False when the header would draw nothing, so a wide window does not get an empty side pane. */
 private val HomeUiState.hasHeader: Boolean
-    get() = ringing || reliabilityProblems > 0 || sleep != SleepState.Hidden
+    get() = ringing || snoozedUntil != null || reliabilityProblems > 0 || sleep != SleepState.Hidden
 
 /** Warnings first, then the sleep control. Shared by the single column and the side pane. */
 @Composable
@@ -242,6 +243,14 @@ private fun HomeHeader(
             WarningBanner(
                 message = stringResource(R.string.ui_home_warning_ringing),
                 actionLabel = stringResource(R.string.ui_home_warning_ringing_action),
+                onAction = onOpenRinging,
+            )
+        }
+        val snoozedUntil = state.snoozedUntil
+        if (!state.ringing && snoozedUntil != null) {
+            WarningBanner(
+                message = stringResource(R.string.ui_home_warning_snoozed, clockText(snoozedUntil, state.zone)),
+                actionLabel = stringResource(R.string.ui_home_warning_snoozed_action),
                 onAction = onOpenRinging,
             )
         }

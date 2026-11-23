@@ -11,12 +11,15 @@ import dev.balaji.rem.di.LocalAppContainer
 /**
  * Navigation graph of the ringing activity.
  *
- * Each tap that opens the scanner or the typed fallback starts a quiet period. The tap does
+ * The scanner and the typed fallback dismiss a snoozed ring too, when the ringing screen
+ * shows one. Each tap that opens the scanner or the typed fallback starts a quiet period,
+ * which does nothing while the ring is snoozed. The tap does
  * it, not the opened screen, so a scanner that comes back from saved state after a process
  * death leaves the resumed ring loud.
  */
 @Composable
 fun RingNavHost(
+    onClose: () -> Unit,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
 ) {
@@ -32,6 +35,7 @@ fun RingNavHost(
                     controller.startQuietPeriod()
                     navController.navigate(TypedFallbackRoute) { launchSingleTop = true }
                 },
+                onClose = onClose,
             )
         }
         composable<RingScannerRoute> {
