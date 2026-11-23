@@ -49,8 +49,6 @@ fun SettingsScreen(
         onFallAsleepMinutes = viewModel::setFallAsleepMinutes,
         onEarlyWindowMinutes = viewModel::setEarlyWindowMinutes,
         onSpeakerFallbackSeconds = viewModel::setSpeakerFallbackSeconds,
-        onMinRingVolumePercent = viewModel::setMinRingVolumePercent,
-        onVolumeRampSeconds = viewModel::setVolumeRampSeconds,
         onReset = viewModel::resetToDefaults,
         modifier = modifier,
     )
@@ -64,8 +62,6 @@ fun SettingsContent(
     onFallAsleepMinutes: (Int) -> Unit,
     onEarlyWindowMinutes: (Int) -> Unit,
     onSpeakerFallbackSeconds: (Int) -> Unit,
-    onMinRingVolumePercent: (Int) -> Unit,
-    onVolumeRampSeconds: (Int) -> Unit,
     onReset: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -114,24 +110,6 @@ fun SettingsContent(
                 onCommit = onEarlyWindowMinutes,
             )
             SectionTitle(stringResource(R.string.ui_settings_section_ringing))
-            SettingSlider(
-                title = stringResource(R.string.ui_settings_min_volume),
-                description = stringResource(R.string.ui_settings_min_volume_description),
-                value = settings.minRingVolumePercent,
-                valueLabel = { stringResource(R.string.ui_unit_percent, it) },
-                range = RemSettings.MIN_RING_VOLUME_PERCENT,
-                step = 5,
-                onCommit = onMinRingVolumePercent,
-            )
-            SettingSlider(
-                title = stringResource(R.string.ui_settings_ramp),
-                description = stringResource(R.string.ui_settings_ramp_description),
-                value = settings.volumeRampSeconds,
-                valueLabel = { if (it == 0) stringResource(R.string.ui_settings_off) else secondsLabel(it) },
-                range = RemSettings.VOLUME_RAMP_SECONDS,
-                step = 15,
-                onCommit = onVolumeRampSeconds,
-            )
             SettingSlider(
                 title = stringResource(R.string.ui_settings_speaker_fallback),
                 description = stringResource(R.string.ui_settings_speaker_fallback_description),
@@ -231,8 +209,6 @@ private fun SettingsPreview() {
             onFallAsleepMinutes = {},
             onEarlyWindowMinutes = {},
             onSpeakerFallbackSeconds = {},
-            onMinRingVolumePercent = {},
-            onVolumeRampSeconds = {},
             onReset = {},
         )
     }

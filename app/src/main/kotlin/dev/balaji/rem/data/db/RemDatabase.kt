@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [AlarmEntity::class, BarcodeEntity::class], version = 1)
+@Database(entities = [AlarmEntity::class, BarcodeEntity::class], version = 2)
 @TypeConverters(Converters::class)
 abstract class RemDatabase : RoomDatabase() {
     abstract fun alarmDao(): AlarmDao
@@ -21,6 +21,8 @@ abstract class RemDatabase : RoomDatabase() {
          *   storage context, so the database opens before the first unlock.
          */
         fun open(storageContext: Context): RemDatabase =
-            Room.databaseBuilder(storageContext, RemDatabase::class.java, FILE_NAME).build()
+            Room.databaseBuilder(storageContext, RemDatabase::class.java, FILE_NAME)
+                .addMigrations(*MIGRATIONS)
+                .build()
     }
 }

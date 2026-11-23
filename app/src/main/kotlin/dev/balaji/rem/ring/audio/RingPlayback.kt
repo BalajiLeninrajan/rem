@@ -27,13 +27,13 @@ internal class RingPlayback(private val context: Context, val spec: RingSpec) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val audioManager: AudioManager = context.getSystemService(AudioManager::class.java)
     private val player = AlarmAudioPlayer(context, scope)
-    private val volumeFloor = AlarmVolumeFloor(audioManager, spec.settings.minRingVolumePercent)
+    private val volumeFloor = AlarmVolumeFloor(audioManager, spec.minRingVolumePercent)
     private val vibration = AlarmVibration(context)
     private val router = HeadphoneRouter(
         audioManager = audioManager,
         player = player,
         headphonesOnly = spec.headphonesOnly,
-        fallbackAfter = Duration.ofSeconds(spec.settings.speakerFallbackSeconds.toLong()),
+        fallbackAfter = Duration.ofSeconds(spec.speakerFallbackSeconds.toLong()),
         scope = scope,
         onRouteSettled = volumeFloor::enforce,
     )
@@ -64,7 +64,7 @@ internal class RingPlayback(private val context: Context, val spec: RingSpec) {
             guarded("tone") { player.prepare(spec.ringtoneUri) }
             guarded("routing") { router.start() }
             // Starts even when preparing failed: the player then rebuilds itself on the bundled tone.
-            guarded("playback") { player.start(spec.settings.volumeRampSeconds) }
+            guarded("playback") { player.start(spec.volumeRampSeconds) }
             while (true) {
                 volumeFloor.enforce()
                 delay(VOLUME_POLL_MILLIS)

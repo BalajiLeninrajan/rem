@@ -27,9 +27,7 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
 
     fun setSpeakerFallbackSeconds(value: Int) = change { it.copy(speakerFallbackSeconds = value) }
 
-    fun setMinRingVolumePercent(value: Int) = change { it.copy(minRingVolumePercent = value) }
-
-    fun setVolumeRampSeconds(value: Int) = change { it.copy(volumeRampSeconds = value) }
+    fun setHeadphonesOnly(enabled: Boolean) = change { it.copy(headphonesOnly = enabled) }
 
     fun resetToDefaults() = change { RemSettings.DEFAULT }
 

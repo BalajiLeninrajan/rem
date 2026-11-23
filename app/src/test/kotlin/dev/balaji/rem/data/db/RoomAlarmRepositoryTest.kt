@@ -4,8 +4,8 @@ import android.app.Application
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.cash.turbine.test
 import dev.balaji.rem.core.Alarm
-import dev.balaji.rem.data.AlarmRepository
 import dev.balaji.rem.data.contract.AlarmRepositoryContract
+import dev.balaji.rem.data.contract.AlarmStorage
 import java.time.LocalTime
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.test.runTest
@@ -22,7 +22,10 @@ class RoomAlarmRepositoryTest : AlarmRepositoryContract() {
     @get:Rule
     val rule = InMemoryDatabaseRule()
 
-    override fun createRepository(): AlarmRepository = RoomAlarmRepository(rule.database.alarmDao())
+    override fun createStorage() = AlarmStorage(
+        RoomAlarmRepository(rule.database.alarmDao()),
+        RoomBarcodeRepository(rule.database.barcodeDao()),
+    )
 
     private val seven = Alarm(time = LocalTime.of(7, 0))
 

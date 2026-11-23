@@ -10,8 +10,9 @@ sealed interface RingingState {
 
     /**
      * @property label the alarm label, possibly empty.
-     * @property requiresBarcode false when no barcode is registered. Then, and only then,
-     *   [RingController.dismissWithoutBarcode] works and the screen shows a plain button.
+     * @property requiresBarcode false when the alarm has no barcode, and for the test alarm.
+     *   Then, and only then, [RingController.dismissWithoutBarcode] works and the screen
+     *   shows a plain button.
      */
     data class Ringing(
         val alarmId: Long,
@@ -26,7 +27,7 @@ enum class DismissResult {
     /** The ring has stopped. */
     DISMISSED,
 
-    /** Wrong barcode, wrong typed code, or a plain dismissal while barcodes are registered. Still ringing. */
+    /** Wrong barcode, wrong typed code, or a plain dismissal while the alarm has barcodes. Still ringing. */
     REJECTED,
 
     /** Nothing was ringing. */
@@ -47,7 +48,8 @@ enum class DismissResult {
  * - reschedules.
  *
  * A ring of the test alarm ([dev.balaji.rem.schedule.AlarmBroadcast.TEST_ALARM_ID]) has no
- * stored alarm. It rings with defaults and touches neither alarms nor the session.
+ * stored alarm. It rings with the defaults of an alarm, needs no barcode and touches neither
+ * alarms nor the session.
  */
 interface RingController {
     /** [RingingState.Idle] when nothing rings. Survives the ringing activity being closed and reopened. */
@@ -77,13 +79,13 @@ interface RingController {
      */
     fun resumeRinging(ring: ScheduledRing)
 
-    /** Dismisses when [scanned] is one of the registered barcodes. The scanner has already required 2 consecutive frames. */
+    /** Dismisses when [scanned] is one of the ringing alarm's barcodes. The scanner has already required 2 consecutive frames. */
     suspend fun dismissWithBarcode(scanned: ScannedCode): DismissResult
 
     /** Dismisses when [typed] equals the code from the latest [newFallbackCode] call. */
     suspend fun dismissWithTypedCode(typed: String): DismissResult
 
-    /** Dismisses only when no barcode is registered. */
+    /** Dismisses only when the ring started with no barcode on its alarm. */
     suspend fun dismissWithoutBarcode(): DismissResult
 
     /**

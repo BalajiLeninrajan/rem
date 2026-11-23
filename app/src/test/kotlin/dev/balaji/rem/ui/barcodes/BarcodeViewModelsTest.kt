@@ -1,12 +1,15 @@
 package dev.balaji.rem.ui.barcodes
 
+import dev.balaji.rem.core.Alarm
 import dev.balaji.rem.core.Barcode
 import dev.balaji.rem.core.BarcodeFormat
 import dev.balaji.rem.core.BarcodeKey
 import dev.balaji.rem.core.ScannedCode
+import dev.balaji.rem.data.fake.InMemoryAlarmRepository
 import dev.balaji.rem.data.fake.InMemoryBarcodeRepository
 import dev.balaji.rem.ui.testing.MainDispatcherRule
 import dev.balaji.rem.ui.testing.keepCollecting
+import java.time.LocalTime
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -21,6 +24,7 @@ class BarcodeViewModelsTest {
     val mainDispatcher = MainDispatcherRule()
 
     private val repository = InMemoryBarcodeRepository()
+    private val alarms = InMemoryAlarmRepository(listOf(Alarm(id = ALARM, time = LocalTime.of(7, 0))), repository)
 
     private val toothpaste = ScannedCode(BarcodeFormat.EAN_13, "4006381333931")
     private val toothpasteKey = BarcodeKey(BarcodeFormat.EAN_13, "4006381333931")
@@ -31,7 +35,7 @@ class BarcodeViewModelsTest {
 
     @Test
     fun `a new barcode waits for a name and is stored with it`() = runTest {
-        val scan = BarcodeScanViewModel(testOnly = false, repository)
+        val scan = BarcodeScanViewModel(testOnly = false, alarms, repository)
 
         scan.onScanned(toothpaste)
         advanceUntilIdle()
@@ -39,22 +43,22 @@ class BarcodeViewModelsTest {
 
         scan.save()
         advanceUntilIdle()
-        assertTrue("a blank name must not be stored", repository.all().isEmpty())
+        assertTrue("a blank name must not be stored", repository.all(ALARM).isEmpty())
 
         scan.setLabel("  Toothpaste ")
         scan.save()
         advanceUntilIdle()
 
-        val stored = repository.all().single()
+        val stored = repository.all(ALARM).single()
         assertEquals(Barcode(stored.id, "Toothpaste", BarcodeFormat.EAN_13, "4006381333931"), stored)
         assertEquals(ScanStage.Saved, scan.state.value.stage)
     }
 
     @Test
     fun `a barcode registered in its other format is rejected as a duplicate`() = runTest {
-        val id = repository.add(Barcode.from("Cereal", cerealAsUpcA))
-        val existing = repository.all().single()
-        val scan = BarcodeScanViewModel(testOnly = false, repository)
+        val id = repository.add(ALARM, Barcode.from("Cereal", cerealAsUpcA))
+        val existing = repository.all(ALARM).single()
+        val scan = BarcodeScanViewModel(testOnly = false, alarms, repository)
 
         scan.onScanned(cerealAsEan13)
         advanceUntilIdle()
@@ -64,7 +68,7 @@ class BarcodeViewModelsTest {
         scan.setLabel("Second name")
         scan.save()
         advanceUntilIdle()
-        assertEquals(listOf(Barcode(id, "Cereal", BarcodeFormat.EAN_13, "0036000291452")), repository.all())
+        assertEquals(listOf(Barcode(id, "Cereal", BarcodeFormat.EAN_13, "0036000291452")), repository.all(ALARM))
 
         scan.scanAgain()
         assertEquals(ScanStage.Scanning, scan.state.value.stage)
@@ -72,23 +76,23 @@ class BarcodeViewModelsTest {
 
     @Test
     fun `a duplicate that appears between scan and save keeps its first name`() = runTest {
-        val scan = BarcodeScanViewModel(testOnly = false, repository)
+        val scan = BarcodeScanViewModel(testOnly = false, alarms, repository)
         scan.onScanned(toothpaste)
         advanceUntilIdle()
         scan.setLabel("Second")
 
-        repository.add(Barcode.from("First", toothpaste))
+        repository.add(ALARM, Barcode.from("First", toothpaste))
         scan.save()
         advanceUntilIdle()
 
-        val existing = repository.all().single()
+        val existing = repository.all(ALARM).single()
         assertEquals("First", existing.label)
         assertEquals(ScanStage.Duplicate(existing), scan.state.value.stage)
     }
 
     @Test
     fun `only the first scan counts until the user asks to scan again`() = runTest {
-        val scan = BarcodeScanViewModel(testOnly = false, repository)
+        val scan = BarcodeScanViewModel(testOnly = false, alarms, repository)
 
         scan.onScanned(ScannedCode(BarcodeFormat.QR_CODE, "   "))
         advanceUntilIdle()
@@ -102,9 +106,9 @@ class BarcodeViewModelsTest {
 
     @Test
     fun `a test scan names the match and registers nothing`() = runTest {
-        repository.add(Barcode.from("Cereal", cerealAsUpcA))
-        val registered = repository.all()
-        val scan = BarcodeScanViewModel(testOnly = true, repository)
+        repository.add(ALARM, Barcode.from("Cereal", cerealAsUpcA))
+        val registered = repository.all(ALARM)
+        val scan = BarcodeScanViewModel(testOnly = true, alarms, repository)
 
         scan.onScanned(cerealAsEan13)
         advanceUntilIdle()
@@ -114,12 +118,27 @@ class BarcodeViewModelsTest {
         scan.onScanned(toothpaste)
         advanceUntilIdle()
         assertEquals(ScanStage.Tested(toothpasteKey, match = null), scan.state.value.stage)
-        assertEquals(registered, repository.all())
+        assertEquals(registered, repository.all(ALARM))
+    }
+
+    @Test
+    fun `a new barcode is registered on every alarm`() = runTest {
+        val second = alarms.upsert(Alarm(time = LocalTime.of(8, 0)))
+        val scan = BarcodeScanViewModel(testOnly = false, alarms, repository)
+
+        scan.onScanned(toothpaste)
+        advanceUntilIdle()
+        scan.setLabel("Toothpaste")
+        scan.save()
+        advanceUntilIdle()
+
+        assertEquals(listOf("Toothpaste"), repository.all(ALARM).map { it.label })
+        assertEquals(listOf("Toothpaste"), repository.all(second).map { it.label })
     }
 
     @Test
     fun `the list renames with a trimmed name, ignores a blank one and deletes`() = runTest {
-        val id = repository.add(Barcode.from("Cereal", cerealAsUpcA))
+        val id = repository.add(ALARM, Barcode.from("Cereal", cerealAsUpcA))
         val list = BarcodesViewModel(repository)
         keepCollecting(list.state)
         advanceUntilIdle()
@@ -133,5 +152,9 @@ class BarcodeViewModelsTest {
         list.delete(id)
         advanceUntilIdle()
         assertTrue(list.state.value.barcodes.isEmpty())
+    }
+
+    private companion object {
+        const val ALARM = 1L
     }
 }

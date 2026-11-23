@@ -12,9 +12,10 @@ import kotlinx.coroutines.launch
 
 data class BarcodesUiState(val loading: Boolean = true, val barcodes: List<Barcode> = emptyList())
 
+/** Lists the barcodes of every alarm. */
 class BarcodesViewModel(private val repository: BarcodeRepository) : ViewModel() {
-    val state: StateFlow<BarcodesUiState> = repository.barcodes
-        .map { BarcodesUiState(loading = false, barcodes = it) }
+    val state: StateFlow<BarcodesUiState> = repository.barcodesByAlarm
+        .map { byAlarm -> BarcodesUiState(loading = false, barcodes = byAlarm.values.flatten().sortedBy { it.id }) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), BarcodesUiState())
 
     /** A blank label is ignored: every barcode keeps a name the user can recognise. */

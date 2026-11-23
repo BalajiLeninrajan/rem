@@ -3,6 +3,7 @@ package dev.balaji.rem.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.balaji.rem.core.Alarm
+import dev.balaji.rem.core.Barcode
 import dev.balaji.rem.core.PlannedRing
 import dev.balaji.rem.core.RemSettings
 import dev.balaji.rem.core.SchedulePlan
@@ -30,7 +31,7 @@ import kotlinx.coroutines.launch
 
 class HomeViewModel(
     private val alarms: AlarmRepository,
-    barcodes: BarcodeRepository,
+    private val barcodes: BarcodeRepository,
     settings: SettingsRepository,
     private val sessions: SleepSessionRepository,
     scheduler: AlarmScheduler,
@@ -43,14 +44,18 @@ class HomeViewModel(
     private val onboardingOpened = MutableStateFlow(false)
     private var undoExpiry: Job? = null
 
+    /** The barcodes the alarm in [recentlyDeleted] had. Deleting an alarm deletes them, so undo puts them back. */
+    @Volatile
+    private var deletedBarcodes: Pair<Alarm, List<Barcode>>? = null
+
     private val stored = combine(
         alarms.alarms,
-        barcodes.barcodes,
+        barcodes.barcodesByAlarm,
         settings.settings,
         sessions.session,
         settings.onboardingDone,
     ) { storedAlarms, storedBarcodes, storedSettings, session, onboardingDone ->
-        Stored(storedAlarms, storedBarcodes.size, storedSettings, session, onboardingDone)
+        Stored(storedAlarms, storedBarcodes.values.sumOf { it.size }, storedSettings, session, onboardingDone)
     }
 
     private val live = combine(scheduler.plan, ringController.state, now, system) { plan, ringing, instant, checks ->
@@ -75,6 +80,7 @@ class HomeViewModel(
     fun delete(alarmId: Long) {
         viewModelScope.launch {
             val alarm = alarms.get(alarmId) ?: return@launch
+            deletedBarcodes = alarm to barcodes.all(alarmId)
             alarms.delete(alarmId)
             recentlyDeleted.value = alarm
             // The offer ends here and not in the screen. A snackbar that is cut short by leaving
@@ -91,7 +97,8 @@ class HomeViewModel(
         val alarm = recentlyDeleted.value ?: return
         undoExpiry?.cancel()
         recentlyDeleted.value = null
-        viewModelScope.launch { alarms.upsert(alarm) }
+        val ownBarcodes = deletedBarcodes?.takeIf { it.first == alarm }?.second.orEmpty()
+        viewModelScope.launch { alarms.upsertWithBarcodes(alarm, ownBarcodes) }
     }
 
     /** The undo offer for [alarm] ended without being taken. A newer offer is left alone. */

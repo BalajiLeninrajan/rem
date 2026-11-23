@@ -25,9 +25,9 @@ abstract class SettingsRepositoryContract {
     fun `update stores and returns the new settings`() = runTest {
         val repository = createRepository()
 
-        val updated = repository.update { it.copy(cycleMinutes = 100, volumeRampSeconds = 0) }
+        val updated = repository.update { it.copy(cycleMinutes = 100, headphonesOnly = true) }
 
-        assertEquals(RemSettings.DEFAULT.copy(cycleMinutes = 100, volumeRampSeconds = 0), updated)
+        assertEquals(RemSettings.DEFAULT.copy(cycleMinutes = 100, headphonesOnly = true), updated)
         assertEquals(updated, repository.settings.first())
     }
 

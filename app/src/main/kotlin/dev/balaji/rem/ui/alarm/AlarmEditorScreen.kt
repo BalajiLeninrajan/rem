@@ -14,7 +14,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
@@ -96,7 +95,6 @@ fun AlarmEditorScreen(
         onTimeChange = viewModel::setTime,
         onLabelChange = viewModel::setLabel,
         onToggleDay = viewModel::toggleDay,
-        onHeadphonesOnlyChange = viewModel::setHeadphonesOnly,
         onVibrateChange = viewModel::setVibrate,
         onRingtoneChange = viewModel::setRingtone,
         modifier = modifier,
@@ -112,7 +110,6 @@ fun AlarmEditorContent(
     onTimeChange: (LocalTime) -> Unit,
     onLabelChange: (String) -> Unit,
     onToggleDay: (DayOfWeek) -> Unit,
-    onHeadphonesOnlyChange: (Boolean) -> Unit,
     onVibrateChange: (Boolean) -> Unit,
     onRingtoneChange: (String?) -> Unit,
     modifier: Modifier = Modifier,
@@ -161,16 +158,6 @@ fun AlarmEditorContent(
                     imeAction = ImeAction.Done,
                 ),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            )
-            SwitchRow(
-                icon = Icons.Filled.Headphones,
-                title = stringResource(R.string.ui_editor_headphones_only),
-                description = stringResource(
-                    R.string.ui_editor_headphones_only_description,
-                    stringResource(R.string.ui_unit_seconds, state.speakerFallbackSeconds),
-                ),
-                checked = state.headphonesOnly,
-                onCheckedChange = onHeadphonesOnlyChange,
             )
             SwitchRow(
                 icon = Icons.Filled.Vibration,
@@ -320,7 +307,6 @@ private fun AlarmEditorPreview() {
                 isNew = false,
                 label = "Work",
                 repeatDays = RepeatDays.WEEKDAYS,
-                headphonesOnly = true,
                 preview = RingPreview(
                     ringAt = Instant.parse("2026-01-15T06:45:00Z"),
                     deadline = Instant.parse("2026-01-15T07:00:00Z"),
@@ -335,7 +321,6 @@ private fun AlarmEditorPreview() {
             onTimeChange = {},
             onLabelChange = {},
             onToggleDay = {},
-            onHeadphonesOnlyChange = {},
             onVibrateChange = {},
             onRingtoneChange = {},
         )

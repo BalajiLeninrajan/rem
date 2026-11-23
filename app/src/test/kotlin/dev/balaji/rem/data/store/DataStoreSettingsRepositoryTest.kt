@@ -22,7 +22,7 @@ class DataStoreSettingsRepositoryTest : SettingsRepositoryContract() {
     fun `settings and the onboarding flag survive a restart`() = runTest {
         val file = stores.newStoreFile()
         val before = DataStoreSettingsRepository(stores.open(file))
-        val saved = before.update { it.copy(fallAsleepMinutes = 5, minRingVolumePercent = 90) }
+        val saved = before.update { it.copy(fallAsleepMinutes = 5, headphonesOnly = true) }
         before.setOnboardingDone()
         stores.close(file)
 

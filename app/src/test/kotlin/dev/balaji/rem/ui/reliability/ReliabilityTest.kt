@@ -89,7 +89,7 @@ class ReliabilityTest {
         advanceUntilIdle()
         assertEquals(CheckStatus.PROBLEM, viewModel.state.value.checks.single { it.id == CheckId.BARCODE }.status)
 
-        barcodes.add(Barcode(label = "Toothpaste", format = BarcodeFormat.EAN_13, value = "4006381333931"))
+        barcodes.add(1, Barcode(label = "Toothpaste", format = BarcodeFormat.EAN_13, value = "4006381333931"))
         advanceUntilIdle()
         assertTrue(viewModel.state.value.checks.all { it.status == CheckStatus.OK })
     }

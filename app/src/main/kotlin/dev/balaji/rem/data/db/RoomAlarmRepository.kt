@@ -1,6 +1,7 @@
 package dev.balaji.rem.data.db
 
 import dev.balaji.rem.core.Alarm
+import dev.balaji.rem.core.Barcode
 import dev.balaji.rem.data.AlarmRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -15,7 +16,10 @@ class RoomAlarmRepository(private val dao: AlarmDao) : AlarmRepository {
 
     override suspend fun get(id: Long): Alarm? = dao.get(id)?.toAlarm()
 
-    override suspend fun upsert(alarm: Alarm): Long = dao.insertOrReplace(alarm.toEntity())
+    override suspend fun upsert(alarm: Alarm): Long = dao.upsert(alarm.toEntity())
+
+    override suspend fun upsertWithBarcodes(alarm: Alarm, barcodes: List<Barcode>): Long =
+        dao.upsertWithBarcodes(alarm.toEntity(), barcodes.map { it.toNewEntity(alarm.id) })
 
     override suspend fun setEnabled(id: Long, enabled: Boolean) = dao.setEnabled(id, enabled)
 

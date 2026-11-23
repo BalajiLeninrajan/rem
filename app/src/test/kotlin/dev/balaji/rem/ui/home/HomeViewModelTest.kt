@@ -43,8 +43,8 @@ class HomeViewModelTest {
     private val zone = ZoneId.of("America/Toronto")
     private val clock = MutableClock(at("2026-01-14T23:00"), zone)
 
-    private val alarms = InMemoryAlarmRepository()
     private val barcodes = InMemoryBarcodeRepository()
+    private val alarms = InMemoryAlarmRepository(barcodes = barcodes)
     private var settings = InMemorySettingsRepository(onboardingDone = true)
     private val sessions = InMemorySleepSessionRepository()
     private val ringController = FakeRingController()
@@ -173,16 +173,19 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `delete offers undo and undo restores the same alarm`() = runTest {
+    fun `delete offers undo and undo restores the same alarm with its barcodes`() = runTest {
         val viewModel = viewModel()
-        val alarm = Alarm(time = LocalTime.of(7, 0), label = "Work", repeatDays = RepeatDays.WEEKDAYS, headphonesOnly = true)
+        val alarm = Alarm(time = LocalTime.of(7, 0), label = "Work", repeatDays = RepeatDays.WEEKDAYS, minRingVolumePercent = 40)
         val stored = alarm.copy(id = alarms.upsert(alarm))
+        val toothpaste = Barcode(label = "Toothpaste", format = BarcodeFormat.EAN_13, value = "4006381333931")
+        barcodes.add(stored.id, toothpaste)
         replan()
 
         viewModel.delete(stored.id)
         runCurrent()
 
         assertTrue(alarms.all().isEmpty())
+        assertTrue(barcodes.all(stored.id).isEmpty())
         assertTrue(viewModel.state.value.alarms.isEmpty())
         assertEquals(stored, viewModel.state.value.recentlyDeleted)
 
@@ -190,6 +193,7 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf(stored), alarms.all())
+        assertEquals(listOf(toothpaste), barcodes.all(stored.id).map { it.copy(id = Barcode.NEW_ID) })
         assertNull(viewModel.state.value.recentlyDeleted)
     }
 
@@ -238,7 +242,8 @@ class HomeViewModelTest {
         assertEquals(1, viewModel.state.value.reliabilityProblems)
         assertTrue(viewModel.state.value.noBarcodes)
 
-        barcodes.add(Barcode(label = "Toothpaste", format = BarcodeFormat.EAN_13, value = "4006381333931"))
+        val id = alarms.upsert(Alarm(time = LocalTime.of(7, 0)))
+        barcodes.add(id, Barcode(label = "Toothpaste", format = BarcodeFormat.EAN_13, value = "4006381333931"))
         advanceUntilIdle()
         assertEquals(2, viewModel.state.value.reliabilityProblems)
         assertFalse(viewModel.state.value.noBarcodes)

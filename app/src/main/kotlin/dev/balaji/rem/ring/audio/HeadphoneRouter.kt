@@ -13,7 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Applies [nextRoute] to the player: pins a headphone when the alarm asks for headphones
+ * Applies [nextRoute] to the player: pins a headphone when the settings ask for headphones
  * only, checks that the system honoured the pin, and returns to default routing when the
  * device disconnects, when audio goes elsewhere, or after [fallbackAfter].
  *

@@ -36,9 +36,9 @@ class ReliabilityViewModel(
     private val testAlarmRefused = MutableStateFlow(false)
 
     val state: StateFlow<ReliabilityUiState> =
-        combine(system, barcodes.barcodes, testAlarmAt, testAlarmRefused) { checks, registered, testAt, refused ->
+        combine(system, barcodes.barcodesByAlarm, testAlarmAt, testAlarmRefused) { checks, registered, testAt, refused ->
             ReliabilityUiState(
-                checks = if (checks == null) emptyList() else reliabilityChecks(checks, registered.size),
+                checks = if (checks == null) emptyList() else reliabilityChecks(checks, registered.values.sumOf { it.size }),
                 // A test alarm that has rung is no longer worth announcing.
                 testAlarmAt = testAt?.takeIf { it > clock.instant() },
                 testAlarmRefused = refused,

@@ -7,12 +7,18 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 class RoomBarcodeRepository(private val dao: BarcodeDao) : BarcodeRepository {
-    override val barcodes: Flow<List<Barcode>> =
-        dao.observeAll().map { rows -> rows.map(BarcodeEntity::toBarcode) }.distinctUntilChanged()
+    // Room emits after every write to the table, including writes to other alarms' barcodes.
+    override val barcodesByAlarm: Flow<Map<Long, List<Barcode>>> =
+        dao.observeAll()
+            .map { rows -> rows.groupBy(BarcodeEntity::alarmId, BarcodeEntity::toBarcode) }
+            .distinctUntilChanged()
 
-    override suspend fun all(): List<Barcode> = dao.all().map(BarcodeEntity::toBarcode)
+    override fun barcodes(alarmId: Long): Flow<List<Barcode>> =
+        dao.observeFor(alarmId).map { rows -> rows.map(BarcodeEntity::toBarcode) }.distinctUntilChanged()
 
-    override suspend fun add(barcode: Barcode): Long = dao.addOrRelabel(barcode.toNewEntity())
+    override suspend fun all(alarmId: Long): List<Barcode> = dao.allFor(alarmId).map(BarcodeEntity::toBarcode)
+
+    override suspend fun add(alarmId: Long, barcode: Barcode): Long = dao.addOrRelabel(barcode.toNewEntity(alarmId))
 
     override suspend fun rename(id: Long, label: String) = dao.rename(id, label)
 

@@ -36,8 +36,7 @@ class SettingsViewModelTest {
         viewModel.setFallAsleepMinutes(20)
         viewModel.setEarlyWindowMinutes(45)
         viewModel.setSpeakerFallbackSeconds(300)
-        viewModel.setMinRingVolumePercent(55)
-        viewModel.setVolumeRampSeconds(0)
+        viewModel.setHeadphonesOnly(true)
         advanceUntilIdle()
 
         val state = viewModel.state.value
@@ -49,8 +48,7 @@ class SettingsViewModelTest {
                 fallAsleepMinutes = 20,
                 earlyWindowMinutes = 45,
                 speakerFallbackSeconds = 300,
-                minRingVolumePercent = 55,
-                volumeRampSeconds = 0,
+                headphonesOnly = true,
             ),
             state.settings,
         )
@@ -65,8 +63,6 @@ class SettingsViewModelTest {
         viewModel.setFallAsleepMinutes(-5)
         viewModel.setEarlyWindowMinutes(91)
         viewModel.setSpeakerFallbackSeconds(1)
-        viewModel.setMinRingVolumePercent(140)
-        viewModel.setVolumeRampSeconds(-1)
         advanceUntilIdle()
 
         val expected = RemSettings(
@@ -74,8 +70,6 @@ class SettingsViewModelTest {
             fallAsleepMinutes = RemSettings.FALL_ASLEEP_MINUTES.first,
             earlyWindowMinutes = RemSettings.EARLY_WINDOW_MINUTES.last,
             speakerFallbackSeconds = RemSettings.SPEAKER_FALLBACK_SECONDS.first,
-            minRingVolumePercent = RemSettings.MIN_RING_VOLUME_PERCENT.last,
-            volumeRampSeconds = RemSettings.VOLUME_RAMP_SECONDS.first,
         )
         assertEquals(expected, repository.stored.value)
         assertEquals(expected, viewModel.state.value.settings)
@@ -83,7 +77,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `reset restores the defaults`() = runTest {
-        val viewModel = viewModel(InMemorySettingsRepository(RemSettings(cycleMinutes = 75, volumeRampSeconds = 0)))
+        val viewModel = viewModel(InMemorySettingsRepository(RemSettings(cycleMinutes = 75, headphonesOnly = true)))
         assertFalse(viewModel.state.value.isDefault)
 
         viewModel.resetToDefaults()

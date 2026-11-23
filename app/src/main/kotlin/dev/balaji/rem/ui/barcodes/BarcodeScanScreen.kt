@@ -69,7 +69,7 @@ fun BarcodeScanScreen(
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel = containerViewModel { BarcodeScanViewModel(testOnly, it.barcodeRepository) }
+    val viewModel = containerViewModel { BarcodeScanViewModel(testOnly, it.alarmRepository, it.barcodeRepository) }
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.stage) {

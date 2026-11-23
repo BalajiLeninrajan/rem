@@ -39,14 +39,15 @@ data class AlarmEditorUiState(
     val time: LocalTime = AlarmEditorViewModel.DEFAULT_TIME,
     val label: String = "",
     val repeatDays: Set<DayOfWeek> = emptySet(),
-    val headphonesOnly: Boolean = false,
     val vibrate: Boolean = true,
     /** Null means the bundled tone. */
     val ringtoneUri: String? = null,
+    val minRingVolumePercent: Int = Alarm.DEFAULT_MIN_RING_VOLUME_PERCENT,
+    /** 0 disables the ramp. */
+    val volumeRampSeconds: Int = Alarm.DEFAULT_VOLUME_RAMP_SECONDS,
     val preview: RingPreview? = null,
     /** True when the stored alarm is off and saving the draft as it stands keeps it off. Then nothing would ring. */
     val staysOff: Boolean = false,
-    val speakerFallbackSeconds: Int = RemSettings.DEFAULT.speakerFallbackSeconds,
     val now: Instant = Instant.EPOCH,
     val zone: ZoneId = ZoneOffset.UTC,
     /** True after a save or delete. The screen closes when it sees this. */
@@ -73,7 +74,6 @@ class AlarmEditorViewModel(
             current.copy(
                 preview = if (current.loading) null else preview(current, storedSettings, session, instant),
                 staysOff = stored?.let { !it.enabled && !scheduleChanged(it, current) } ?: false,
-                speakerFallbackSeconds = storedSettings.speakerFallbackSeconds,
                 now = instant,
                 zone = clock.zone,
             )
@@ -93,9 +93,10 @@ class AlarmEditorViewModel(
                         time = alarm.time,
                         label = alarm.label,
                         repeatDays = alarm.repeatDays,
-                        headphonesOnly = alarm.headphonesOnly,
                         vibrate = alarm.vibrate,
                         ringtoneUri = alarm.ringtoneUri,
+                        minRingVolumePercent = alarm.minRingVolumePercent,
+                        volumeRampSeconds = alarm.volumeRampSeconds,
                     )
                 }
             }
@@ -115,11 +116,15 @@ class AlarmEditorViewModel(
         it.copy(repeatDays = if (day in it.repeatDays) it.repeatDays - day else it.repeatDays + day)
     }
 
-    fun setHeadphonesOnly(enabled: Boolean) = draft.update { it.copy(headphonesOnly = enabled) }
-
     fun setVibrate(enabled: Boolean) = draft.update { it.copy(vibrate = enabled) }
 
     fun setRingtone(uri: String?) = draft.update { it.copy(ringtoneUri = uri) }
+
+    fun setMinRingVolumePercent(value: Int) =
+        draft.update { it.copy(minRingVolumePercent = value.coerceIn(Alarm.MIN_RING_VOLUME_PERCENT)) }
+
+    fun setVolumeRampSeconds(value: Int) =
+        draft.update { it.copy(volumeRampSeconds = value.coerceIn(Alarm.VOLUME_RAMP_SECONDS)) }
 
     fun save() {
         val current = draft.value
@@ -135,9 +140,10 @@ class AlarmEditorViewModel(
                     repeatDays = current.repeatDays,
                     // Saving a new time or new days means the user wants this alarm, so it is switched on.
                     enabled = scheduleChanged || original.enabled,
-                    headphonesOnly = current.headphonesOnly,
                     vibrate = current.vibrate,
                     ringtoneUri = current.ringtoneUri,
+                    minRingVolumePercent = current.minRingVolumePercent,
+                    volumeRampSeconds = current.volumeRampSeconds,
                 ),
             )
             draft.update { it.copy(finished = true) }

@@ -39,9 +39,10 @@ import kotlinx.coroutines.withTimeout
  * Owns the one live ring. The service only plays what [command] says, and the screens
  * only show [state], so a ring can end from here without either of them being alive.
  *
- * The barcodes that can dismiss a ring are the ones registered when it started. Deleting
- * them all from the main app during a ring does not unlock the plain dismiss button, and
- * a ring picked up again after a process death keeps what its record says about that.
+ * The barcodes that can dismiss a ring are the ones registered on its alarm when it
+ * started. Deleting them all from the main app during a ring does not unlock the plain
+ * dismiss button, and a ring picked up again after a process death keeps what its record
+ * says about that. The test alarm has no stored alarm and needs no barcode.
  *
  * A ring that ends without a dismissal while its deadline is still ahead stays owed: its
  * fired record is removed and a one-shot alarm stays on, so the next reschedule plans the
@@ -74,11 +75,11 @@ internal class DefaultRingController(
         @Volatile
         var label: String = ""
 
-        /** The barcodes registered when the ring started. Null until they are loaded. */
+        /** The barcodes registered on the alarm when the ring started. Null until they are loaded. */
         @Volatile
         var registered: List<Barcode>? = null
 
-        /** False only when the ring started with no barcode registered. Then the plain button works. */
+        /** False only when the ring started with no barcode on its alarm. Then the plain button works. */
         @Volatile
         var requiresBarcode: Boolean = true
 
@@ -279,32 +280,36 @@ internal class DefaultRingController(
      *
      * A storage failure must not silence an alarm, so every failed read falls back to a
      * default that rings. Barcodes that cannot be read leave no plain stop button: the
-     * typed code is then the way out.
+     * typed code is then the way out. The test alarm rings with the defaults of [Alarm].
      */
     private suspend fun load(mine: Live): RingSpec? {
         val id = mine.ring.alarmId
         val alarm = if (mine.isTest) null else loadOr(Alarm(id = id, time = LocalTime.MIDNIGHT)) { alarms.get(id) }
         if (!mine.isTest && !mine.resumed && alarm?.enabled != true) return null
-        val registered = loadBarcodes()
+        val registered = if (mine.isTest) emptyList() else loadBarcodes(id)
         mine.registered = registered.orEmpty()
         mine.requiresBarcode = registered == null || registered.isNotEmpty()
         if (!adoptRecord(mine)) return null
         mine.label = labelOf(id, alarm)
+        val sound = alarm ?: Alarm(id = id, time = LocalTime.MIDNIGHT)
+        val global = loadOr(RemSettings.DEFAULT) { settings.current() }
         return RingSpec(
             alarmId = id,
             label = mine.label,
-            ringtoneUri = alarm?.ringtoneUri,
-            vibrate = alarm?.vibrate ?: true,
-            headphonesOnly = alarm?.headphonesOnly ?: false,
-            settings = loadOr(RemSettings.DEFAULT) { settings.current() },
+            ringtoneUri = sound.ringtoneUri,
+            vibrate = sound.vibrate,
+            minRingVolumePercent = sound.minRingVolumePercent,
+            volumeRampSeconds = sound.volumeRampSeconds,
+            headphonesOnly = global.headphonesOnly,
+            speakerFallbackSeconds = global.speakerFallbackSeconds,
             startedAt = mine.startedAt,
         )
     }
 
-    /** Null when the barcodes could not be read, even at the second try. */
-    private suspend fun loadBarcodes(): List<Barcode>? {
+    /** The barcodes of [alarmId]. Null when they could not be read, even at the second try. */
+    private suspend fun loadBarcodes(alarmId: Long): List<Barcode>? {
         repeat(BARCODE_READS) {
-            val read: List<Barcode>? = loadOr(null) { barcodes.all() }
+            val read: List<Barcode>? = loadOr(null) { barcodes.all(alarmId) }
             if (read != null) return read
         }
         return null

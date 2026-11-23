@@ -61,7 +61,8 @@ class AlarmEditorViewModelTest {
         editor.toggleDay(DayOfWeek.MONDAY)
         editor.toggleDay(DayOfWeek.TUESDAY)
         editor.toggleDay(DayOfWeek.TUESDAY)
-        editor.setHeadphonesOnly(true)
+        editor.setMinRingVolumePercent(40)
+        editor.setVolumeRampSeconds(0)
         editor.setVibrate(false)
         editor.setRingtone("content://media/alarm/7")
         editor.save()
@@ -75,9 +76,10 @@ class AlarmEditorViewModelTest {
                 label = "Gym",
                 repeatDays = setOf(DayOfWeek.MONDAY),
                 enabled = true,
-                headphonesOnly = true,
                 vibrate = false,
                 ringtoneUri = "content://media/alarm/7",
+                minRingVolumePercent = 40,
+                volumeRampSeconds = 0,
             ),
             saved,
         )
@@ -107,7 +109,14 @@ class AlarmEditorViewModelTest {
 
     @Test
     fun `an existing alarm is loaded and a label edit keeps it switched off`() = runTest {
-        val stored = Alarm(time = LocalTime.of(8, 15), label = "Old", repeatDays = RepeatDays.WEEKDAYS, enabled = false)
+        val stored = Alarm(
+            time = LocalTime.of(8, 15),
+            label = "Old",
+            repeatDays = RepeatDays.WEEKDAYS,
+            enabled = false,
+            minRingVolumePercent = 25,
+            volumeRampSeconds = 120,
+        )
         val id = alarms.upsert(stored)
         val editor = editor(id)
 
@@ -116,6 +125,8 @@ class AlarmEditorViewModelTest {
         assertEquals(LocalTime.of(8, 15), loaded.time)
         assertEquals("Old", loaded.label)
         assertEquals(RepeatDays.WEEKDAYS, loaded.repeatDays)
+        assertEquals(25, loaded.minRingVolumePercent)
+        assertEquals(120, loaded.volumeRampSeconds)
 
         editor.setLabel("New")
         editor.save()

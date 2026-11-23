@@ -39,8 +39,8 @@ class DefaultRingControllerTest {
     private val deadline = Instant.parse("2026-01-15T07:00:00Z")
     private val clock = MutableClock(now, ZoneOffset.UTC)
 
-    private val alarms = InMemoryAlarmRepository()
     private val barcodes = InMemoryBarcodeRepository()
+    private val alarms = InMemoryAlarmRepository(barcodes = barcodes)
     private val sessions = InMemorySleepSessionRepository()
     private val settings = InMemorySettingsRepository()
     private val ringState = InMemoryRingStateStore()
@@ -60,9 +60,9 @@ class DefaultRingControllerTest {
     /** Barcode reads that throw before reads work again. */
     private var failingBarcodeReads = 0
     private val barcodeSource = object : BarcodeRepository by barcodes {
-        override suspend fun all(): List<Barcode> {
+        override suspend fun all(alarmId: Long): List<Barcode> {
             if (failingBarcodeReads-- > 0) throw IOException("disk")
-            return this@DefaultRingControllerTest.barcodes.all()
+            return this@DefaultRingControllerTest.barcodes.all(alarmId)
         }
     }
 
@@ -126,25 +126,67 @@ class DefaultRingControllerTest {
 
     @Test
     fun `a started ring is persisted and tells the service what to play`() = runTest {
-        val id = alarms.upsert(Alarm(time = LocalTime.of(7, 0), label = "Work", headphonesOnly = true, vibrate = false))
-        barcodes.add(Barcode.from("Toothpaste", toothpaste))
-        settings.update { it.copy(speakerFallbackSeconds = 45) }
+        val alarm = Alarm(
+            time = LocalTime.of(7, 0),
+            label = "Work",
+            vibrate = false,
+            ringtoneUri = "content://tone",
+            minRingVolumePercent = 40,
+            volumeRampSeconds = 0,
+        )
+        val id = alarms.upsert(alarm)
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        settings.update { it.copy(speakerFallbackSeconds = 45, headphonesOnly = true) }
 
         val controller = ringing(id)
 
         assertEquals(RingingRecord(id, now, now, deadline), ringState.currentRinging())
         assertEquals(RingingState.Ringing(id, "Work", now, deadline, requiresBarcode = true), controller.state.value)
         val spec = (controller.command.value as RingCommand.Play).spec
-        assertEquals("Work", spec.label)
-        assertTrue(spec.headphonesOnly)
-        assertFalse(spec.vibrate)
-        assertEquals(45, spec.settings.speakerFallbackSeconds)
+        assertEquals(
+            RingSpec(
+                alarmId = id,
+                label = "Work",
+                ringtoneUri = "content://tone",
+                vibrate = false,
+                minRingVolumePercent = 40,
+                volumeRampSeconds = 0,
+                headphonesOnly = true,
+                speakerFallbackSeconds = 45,
+                startedAt = now,
+            ),
+            spec,
+        )
+    }
+
+    @Test
+    fun `only the barcodes of the ringing alarm dismiss it`() = runTest {
+        val id = oneShot()
+        val other = oneShot("Other")
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        barcodes.add(other, Barcode.from("Mug", ScannedCode(BarcodeFormat.QR_CODE, "mug")))
+        val controller = ringing(id)
+
+        assertEquals(DismissResult.REJECTED, controller.dismissWithBarcode(ScannedCode(BarcodeFormat.QR_CODE, "mug")))
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithBarcode(toothpaste))
+    }
+
+    @Test
+    fun `an alarm without barcodes needs none, whatever other alarms have`() = runTest {
+        val id = oneShot()
+        val other = oneShot("Other")
+        barcodes.add(other, Barcode.from("Toothpaste", toothpaste))
+        val controller = ringing(id)
+
+        assertEquals(false, (controller.state.value as RingingState.Ringing).requiresBarcode)
+        assertEquals(DismissResult.REJECTED, controller.dismissWithBarcode(toothpaste))
+        assertEquals(DismissResult.DISMISSED, controller.dismissWithoutBarcode())
     }
 
     @Test
     fun `a wrong barcode is rejected and the ring goes on`() = runTest {
         val id = oneShot()
-        barcodes.add(Barcode.from("Toothpaste", toothpaste))
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
         val controller = ringing(id)
 
         val result = controller.dismissWithBarcode(ScannedCode(BarcodeFormat.EAN_13, "5000112637922"))
@@ -158,7 +200,7 @@ class DefaultRingControllerTest {
     @Test
     fun `a registered barcode dismisses, disables the one-shot alarm and ends the covering session`() = runTest {
         val id = oneShot()
-        barcodes.add(Barcode.from("Toothpaste", toothpaste))
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
         sessions.start(now.minusSeconds(8 * 3600))
         val controller = ringing(id)
 
@@ -177,7 +219,7 @@ class DefaultRingControllerTest {
     @Test
     fun `a UPC-A barcode is accepted when the scanner reports it as EAN-13`() = runTest {
         val id = oneShot()
-        barcodes.add(Barcode.from("Cereal", ScannedCode(BarcodeFormat.UPC_A, "036000291452")))
+        barcodes.add(id, Barcode.from("Cereal", ScannedCode(BarcodeFormat.UPC_A, "036000291452")))
         val controller = ringing(id)
 
         assertEquals(DismissResult.DISMISSED, controller.dismissWithBarcode(ScannedCode(BarcodeFormat.EAN_13, "0036000291452")))
@@ -186,7 +228,7 @@ class DefaultRingControllerTest {
     @Test
     fun `a repeating alarm stays enabled and a session that does not cover the deadline stays`() = runTest {
         val id = alarms.upsert(Alarm(time = LocalTime.of(7, 0), repeatDays = RepeatDays.EVERY_DAY))
-        barcodes.add(Barcode.from("Toothpaste", toothpaste))
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
         sessions.start(now.minusSeconds(20 * 3600))
         val controller = ringing(id)
 
@@ -199,7 +241,7 @@ class DefaultRingControllerTest {
     @Test
     fun `the typed code dismisses only when it is the latest one`() = runTest {
         val id = oneShot()
-        barcodes.add(Barcode.from("Toothpaste", toothpaste))
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
         val controller = ringing(id)
 
         assertEquals("no code was asked for yet", DismissResult.REJECTED, controller.dismissWithTypedCode(""))
@@ -240,7 +282,7 @@ class DefaultRingControllerTest {
     @Test
     fun `with a barcode registered a plain dismissal is rejected`() = runTest {
         val id = oneShot()
-        barcodes.add(Barcode.from("Toothpaste", toothpaste))
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
         val controller = ringing(id)
 
         assertEquals(DismissResult.REJECTED, controller.dismissWithoutBarcode())
@@ -250,7 +292,7 @@ class DefaultRingControllerTest {
     @Test
     fun `deleting every barcode during a ring does not unlock the plain dismissal`() = runTest {
         val id = oneShot()
-        val barcodeId = barcodes.add(Barcode.from("Toothpaste", toothpaste))
+        val barcodeId = barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
         val controller = ringing(id)
 
         barcodes.delete(barcodeId)
@@ -271,7 +313,7 @@ class DefaultRingControllerTest {
     @Test
     fun `after 30 minutes the ring stops and is reported as missed, and the session stays`() = runTest {
         val id = oneShot()
-        barcodes.add(Barcode.from("Toothpaste", toothpaste))
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
         sessions.start(now.minusSeconds(8 * 3600))
         val controller = ringing(id)
 
@@ -402,11 +444,20 @@ class DefaultRingControllerTest {
     @Test
     fun `the test alarm rings without a stored alarm and leaves the session alone`() = runTest {
         sessions.start(now.minusSeconds(3600))
+        val id = oneShot()
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
+        settings.update { it.copy(headphonesOnly = true) }
         val controller = ringing(AlarmBroadcast.TEST_ALARM_ID)
 
         val state = controller.state.value as RingingState.Ringing
         assertEquals("Test alarm", state.label)
-        assertEquals(false, state.requiresBarcode)
+        assertEquals("the test alarm has no barcodes of its own", false, state.requiresBarcode)
+        val spec = (controller.command.value as RingCommand.Play).spec
+        assertEquals(Alarm.DEFAULT_MIN_RING_VOLUME_PERCENT, spec.minRingVolumePercent)
+        assertEquals(Alarm.DEFAULT_VOLUME_RAMP_SECONDS, spec.volumeRampSeconds)
+        assertTrue(spec.vibrate)
+        assertNull(spec.ringtoneUri)
+        assertTrue(spec.headphonesOnly)
 
         assertEquals(DismissResult.DISMISSED, controller.dismissWithoutBarcode())
         assertEquals(now.minusSeconds(3600), sessions.current()?.startedAt)
@@ -444,7 +495,7 @@ class DefaultRingControllerTest {
     @Test
     fun `a ring cut off by a reboot comes back through the watchdog with its original start time`() = runTest {
         val id = oneShot()
-        barcodes.add(Barcode.from("Toothpaste", toothpaste))
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
         val startedAt = now.minusSeconds(60)
         val record = RingingRecord(id, startedAt, startedAt, deadline)
         ringState.setRinging(record)
@@ -572,7 +623,7 @@ class DefaultRingControllerTest {
     @Test
     fun `barcodes that cannot be read at ring start are read again`() = runTest {
         val id = oneShot()
-        barcodes.add(Barcode.from("Toothpaste", toothpaste))
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
         failingBarcodeReads = 1
 
         val controller = ringing(id)
@@ -610,7 +661,7 @@ class DefaultRingControllerTest {
     @Test
     fun `a redelivered service start resumes the persisted ring with its original start time`() = runTest {
         val id = oneShot()
-        barcodes.add(Barcode.from("Toothpaste", toothpaste))
+        barcodes.add(id, Barcode.from("Toothpaste", toothpaste))
         val startedAt = now.minusSeconds(10 * 60)
         val record = RingingRecord(id, startedAt, startedAt, deadline)
         ringState.setRinging(record)

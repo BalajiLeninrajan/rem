@@ -14,7 +14,9 @@ data class BarcodeKey(val format: BarcodeFormat, val value: String) {
 }
 
 /**
- * A barcode the user registered for dismissal.
+ * A barcode the user registered for dismissal. Every stored barcode belongs to one alarm,
+ * and only a ring of that alarm accepts it. Which alarm is a storage matter, so it is not
+ * a field here: an alarm that is still being edited holds barcodes that are not stored yet.
  *
  * @property id 0 until saved.
  * @property format the normalised format, see [normaliseBarcode].
@@ -54,7 +56,7 @@ fun normaliseBarcode(format: BarcodeFormat, rawValue: String): BarcodeKey = when
         BarcodeKey(format, rawValue.trim())
 }
 
-/** The registered barcode that [scanned] is, or null. */
+/** The barcode in this collection that [scanned] is, or null. */
 fun Collection<Barcode>.findMatch(scanned: ScannedCode): Barcode? {
     val key = scanned.normalised()
     if (!key.isUsable) return null

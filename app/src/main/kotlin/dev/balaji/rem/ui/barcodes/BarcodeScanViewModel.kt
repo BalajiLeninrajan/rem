@@ -6,10 +6,12 @@ import dev.balaji.rem.core.Barcode
 import dev.balaji.rem.core.BarcodeKey
 import dev.balaji.rem.core.ScannedCode
 import dev.balaji.rem.core.findMatch
+import dev.balaji.rem.data.AlarmRepository
 import dev.balaji.rem.data.BarcodeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -39,12 +41,13 @@ data class BarcodeScanUiState(
 )
 
 /**
- * One scan. With [testOnly] it reports which registered barcode the scan matches.
- * Otherwise it registers the scan under a label, unless a barcode with the same normalised
- * value exists.
+ * One scan. With [testOnly] it reports which barcode of any alarm the scan matches.
+ * Otherwise it registers the scan under a label on every stored alarm, unless an alarm
+ * already has a barcode with the same normalised value.
  */
 class BarcodeScanViewModel(
     testOnly: Boolean,
+    private val alarms: AlarmRepository,
     private val repository: BarcodeRepository,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(BarcodeScanUiState(testOnly))
@@ -55,7 +58,7 @@ class BarcodeScanViewModel(
         val key = scanned.normalised()
         if (!key.isUsable) return
         viewModelScope.launch {
-            val match = repository.all().findMatch(scanned)
+            val match = everyBarcode().findMatch(scanned)
             mutableState.update { current ->
                 when {
                     current.stage != ScanStage.Scanning -> current
@@ -79,15 +82,18 @@ class BarcodeScanViewModel(
         if (stage !is ScanStage.Captured || !stage.canSave) return
         viewModelScope.launch {
             // The repository would rename a barcode with the same key. Registration must reject it instead.
-            val existing = repository.all().firstOrNull { it.key == stage.key }
+            val existing = everyBarcode().firstOrNull { it.key == stage.key }
             if (existing != null) {
                 mutableState.update { it.copy(stage = ScanStage.Duplicate(existing)) }
             } else {
-                repository.add(Barcode(label = stage.label.trim(), format = stage.key.format, value = stage.key.value))
+                val barcode = Barcode(label = stage.label.trim(), format = stage.key.format, value = stage.key.value)
+                alarms.all().forEach { repository.add(it.id, barcode) }
                 mutableState.update { it.copy(stage = ScanStage.Saved) }
             }
         }
     }
 
     fun scanAgain() = mutableState.update { it.copy(stage = ScanStage.Scanning, cameraFailed = false) }
+
+    private suspend fun everyBarcode(): List<Barcode> = repository.barcodesByAlarm.first().values.flatten().sortedBy { it.id }
 }
