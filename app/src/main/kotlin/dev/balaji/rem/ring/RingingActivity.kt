@@ -17,8 +17,21 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
+ * Whether the ringing activity closes when [state] follows [shown], null on its first
+ * state. It stays for a ring and for the snoozed ring it was opened for, and closes when
+ * nothing rings or is snoozed, when the ring it showed is snoozed, and when the snooze it
+ * showed is dismissed and another one would take its place.
+ */
+internal fun closesRingScreen(shown: RingingState?, state: RingingState): Boolean = when (state) {
+    RingingState.Idle -> true
+    is RingingState.Ringing -> false
+    is RingingState.Snoozed -> shown is RingingState.Ringing || (shown is RingingState.Snoozed && shown.alarmId != state.alarmId)
+}
+
+/**
  * Shows over the lock screen while an alarm rings. Hosts the ringing, scanner and typed
  * fallback screens. It only shows the ring: closing it, by home or recents, stops nothing.
+ * Opened while nothing rings, from a "snoozed until" notification, it shows the snoozed ring.
  */
 class RingingActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,13 +45,14 @@ class RingingActivity : ComponentActivity() {
         setContent {
             RemTheme {
                 CompositionLocalProvider(LocalAppContainer provides appContainer) {
-                    RingNavHost()
+                    RingNavHost(onClose = { finishAndRemoveTask() })
                 }
             }
         }
         // The controller reports Ringing from the moment the alarm fires, so Idle here means the ring is over.
         lifecycleScope.launch {
-            appContainer.ringController.state.first { it is RingingState.Idle }
+            var shown: RingingState? = null
+            appContainer.ringController.state.first { state -> closesRingScreen(shown, state).also { shown = state } }
             finishAndRemoveTask()
         }
     }

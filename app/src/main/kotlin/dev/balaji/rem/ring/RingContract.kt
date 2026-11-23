@@ -25,6 +25,15 @@ object RingContract {
 
     const val ACTION_RING = "dev.balaji.rem.action.RING"
 
+    /** The Snooze action of the ringing notification, for [RingActionReceiver]. */
+    const val ACTION_SNOOZE = "dev.balaji.rem.action.SNOOZE"
+
+    /** The Dismiss action of the ringing notification of an alarm without barcodes, for [RingActionReceiver]. */
+    const val ACTION_DISMISS = "dev.balaji.rem.action.DISMISS"
+
+    /** The alarm the notification action was shown for. */
+    const val EXTRA_ALARM_ID = "dev.balaji.rem.extra.RINGING_ALARM_ID"
+
     /**
      * Starts [RingingService] for [ring] when passed to `startForegroundService`. The
      * extras are the ones from `AlarmBroadcast`, readable with `scheduledRingOrNull()`.
@@ -41,4 +50,8 @@ object RingContract {
     fun activityIntent(context: Context): Intent =
         Intent(context, RingingActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
+
+    /** [ACTION_SNOOZE] or [ACTION_DISMISS] for the ring of [alarmId], to wrap in `PendingIntent.getBroadcast`. */
+    fun actionIntent(context: Context, action: String, alarmId: Long): Intent =
+        Intent(context, RingActionReceiver::class.java).setAction(action).putExtra(EXTRA_ALARM_ID, alarmId)
 }

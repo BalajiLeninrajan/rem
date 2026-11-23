@@ -11,6 +11,8 @@
     <string name="ring_test_alarm_label">Test alarm</string>
     <string name="ring_notification_text">Ringing. Open to stop it.</string>
     <string name="ring_action_scan">Scan to dismiss</string>
+    <string name="ring_action_dismiss">Dismiss</string>
+    <string name="ring_action_snooze">Snooze %1$d min</string>
     <string name="ring_snoozed_notification_text">Snoozed until %1$s. Tap to dismiss it now.</string>
 
     <string name="ring_missed_title">Missed alarm</string>
@@ -22,8 +24,18 @@
 
     <string name="ring_scan_to_dismiss">scan to dismiss</string>
     <string name="ring_cant_scan">can\'t scan?</string>
-    <string name="ring_stop_alarm">Stop alarm</string>
+    <string name="ring_dismiss">Dismiss</string>
     <string name="ring_no_barcode_hint">This alarm has no barcode, so this button stops it.</string>
+    <string name="ring_snooze">snooze %1$d min (%2$d left)</string>
+    <string name="ring_snoozed_until">Snoozed until %1$s</string>
+    <plurals name="ring_snoozes_left">
+        <item quantity="one">%d snooze left when it rings again.</item>
+        <item quantity="other">%d snoozes left when it rings again.</item>
+    </plurals>
+    <string name="ring_no_snoozes_left">No snoozes left when it rings again.</string>
+    <string name="ring_scan_to_dismiss_now">scan to dismiss now</string>
+    <string name="ring_dismiss_now">Dismiss now</string>
+    <string name="ring_close">Close</string>
 
     <string name="ring_scanner_instruction">Point the camera at one of this alarm\'s barcodes.</string>
     <string name="ring_scanner_rejected">%1$s is not one of this alarm\'s barcodes.</string>

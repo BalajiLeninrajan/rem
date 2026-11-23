@@ -112,7 +112,7 @@ class RingingService : Service() {
             return
         }
         stopPlayback()
-        show(notifications.ringing(spec.label, spec.startedAt))
+        show(notifications.ringing(spec.label, spec.startedAt, spec))
         playback = RingPlayback(this, spec).also {
             it.setQuiet(quiet)
             it.start()
