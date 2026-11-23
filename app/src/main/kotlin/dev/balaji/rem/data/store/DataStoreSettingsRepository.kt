@@ -35,6 +35,9 @@ class DataStoreSettingsRepository(private val store: DataStore<Preferences>) : S
         val HEADPHONES_ONLY = booleanPreferencesKey("headphones_only")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
 
+        /** Version 1 kept the volume floor and ramp here. Each alarm has its own now, so the next write removes them. */
+        val VERSION_1_KEYS = listOf(intPreferencesKey("min_ring_volume_percent"), intPreferencesKey("volume_ramp_seconds"))
+
         /** A missing key reads as its default. The result is coerced, in case the file holds values from another version. */
         fun Preferences.toSettings(): RemSettings {
             val default = RemSettings.DEFAULT
@@ -53,6 +56,7 @@ class DataStoreSettingsRepository(private val store: DataStore<Preferences>) : S
             this[EARLY_WINDOW_MINUTES] = settings.earlyWindowMinutes
             this[SPEAKER_FALLBACK_SECONDS] = settings.speakerFallbackSeconds
             this[HEADPHONES_ONLY] = settings.headphonesOnly
+            VERSION_1_KEYS.forEach { remove(it) }
         }
     }
 }

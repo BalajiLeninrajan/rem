@@ -19,7 +19,7 @@ All the rules live here, as pure functions and small value types, with unit test
 
 | Package | Holds |
 |---|---|
-| `data` | Repository interfaces, `RingStateStore`, `DataModule`. `data.db` is Room (`RemDatabase`, alarms and barcodes, `Migrations.kt`). Each barcode row belongs to one alarm through a foreign key that deletes it with the alarm, and is unique per alarm and key. `data.store` is Preferences DataStore (settings, sleep session, ring state). |
+| `data` | Repository interfaces, `RingStateStore`, `DataModule`. `data.db` is Room (`RemDatabase`, alarms and barcodes, `Migrations.kt`). The migration to version 2 gives every alarm the old default volume floor and ramp and turns headphones only off, because it cannot read the version 1 values from DataStore. Each barcode row belongs to one alarm through a foreign key that deletes it with the alarm, and is unique per alarm and key. `data.store` is Preferences DataStore (settings, sleep session, ring state). |
 | `schedule` | `AlarmScheduler` and its implementation `AlarmManagerScheduler`, `AlarmClocks` (the `setAlarmClock` calls), `AlarmReceiver`, `RescheduleReceiver`, `AlarmBroadcast`, `ScheduleModule.kt` |
 | `ring` | `RingController` and `DefaultRingController`, `RingingService`, `RingNotifications`, `RingingActivity`, `RingModule.kt`. `ring.audio` is the player, headphone routing, volume floor and vibration. `ring.ui` is the ringing, scanner and typed fallback screens. |
 | `scan` | `BarcodeScanner` composable and `ScannerCamera` (CameraX with the bundled ML Kit model) |

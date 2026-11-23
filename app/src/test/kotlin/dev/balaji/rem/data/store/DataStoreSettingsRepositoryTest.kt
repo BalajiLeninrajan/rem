@@ -8,6 +8,7 @@ import dev.balaji.rem.data.contract.SettingsRepositoryContract
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -41,6 +42,23 @@ class DataStoreSettingsRepositoryTest : SettingsRepositoryContract() {
 
         assertEquals(RemSettings.DEFAULT.copy(cycleMinutes = 120), repository.current())
         assertEquals(RemSettings.DEFAULT.copy(cycleMinutes = 120), repository.settings.first())
+    }
+
+    @Test
+    fun `an update removes the volume keys of version 1`() = runTest {
+        val store = stores.open()
+        val floor = intPreferencesKey("min_ring_volume_percent")
+        val ramp = intPreferencesKey("volume_ramp_seconds")
+        store.edit {
+            it[floor] = 100
+            it[ramp] = 0
+        }
+
+        DataStoreSettingsRepository(store).update { it.copy(headphonesOnly = true) }
+
+        val stored = store.data.first()
+        assertNull(stored[floor])
+        assertNull(stored[ramp])
     }
 
     @Test

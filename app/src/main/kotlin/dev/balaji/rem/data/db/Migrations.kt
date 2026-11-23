@@ -10,6 +10,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * - `headphones_only` leaves the alarms. It is a global setting now and starts off.
  * - Alarms get `min_ring_volume_percent` and `volume_ramp_seconds`, at the old defaults.
  *
+ * A migration cannot read DataStore, so the user's version 1 volume floor and ramp are not
+ * carried over, and neither is a headphones-only choice. The app has not run on a device
+ * yet, so no one is known to lose a setting. The old volume keys stay in the settings file
+ * until the next settings write removes them.
+ *
  * SQLite on API 31 has no DROP COLUMN, so both tables are rebuilt. The statements create
  * exactly what Room expects for version 2, which Room checks when it opens the database.
  */
