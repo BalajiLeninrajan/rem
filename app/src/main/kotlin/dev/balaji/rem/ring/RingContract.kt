@@ -12,10 +12,16 @@ object RingContract {
 
     const val CHANNEL_MISSED = "missed"
 
+    /** Low importance. The "snoozed until" notification only has to be there. */
+    const val CHANNEL_SNOOZED = "snoozed"
+
     const val NOTIFICATION_ID_RINGING = 1
 
     /** Used with the alarm id as the notification tag. */
     const val NOTIFICATION_ID_MISSED = 2
+
+    /** Used with the alarm id as the notification tag. */
+    const val NOTIFICATION_ID_SNOOZED = 3
 
     const val ACTION_RING = "dev.balaji.rem.action.RING"
 
@@ -27,9 +33,10 @@ object RingContract {
         Intent(context, RingingService::class.java).setAction(ACTION_RING).putScheduledRing(ring)
 
     /**
-     * Opens [RingingActivity]. Used for the full-screen intent, the notification tap and
-     * the "Scan to dismiss" action. The activity reads what is ringing from
-     * [RingController.state], so the intent carries no extras.
+     * Opens [RingingActivity]. Used for the full-screen intent, the notification tap, the
+     * "Scan to dismiss" action and the tap on a "snoozed until" notification. The activity
+     * reads what is ringing or snoozed from [RingController.state], so the intent carries
+     * no extras.
      */
     fun activityIntent(context: Context): Intent =
         Intent(context, RingingActivity::class.java)

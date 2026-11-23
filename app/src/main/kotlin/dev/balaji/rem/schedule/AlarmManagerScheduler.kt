@@ -65,9 +65,10 @@ class AlarmManagerScheduler(
         // (ending a stale session, disabling a missed one-shot alarm, dropping the late
         // consent of a switched-off alarm) come back through
         // these flows and cause one more run, which finds nothing left to change.
-        // The ringing record is watched because a one-shot alarm leaves the plan while it rings.
+        // The ringing record and the snoozed rings are watched because a one-shot alarm leaves
+        // the plan while it rings or is snoozed.
         scope.launch {
-            combine(alarms.alarms, sessions.session, settings.settings, ringState.ringing) { _, _, _, _ -> }
+            combine(alarms.alarms, sessions.session, settings.settings, ringState.ringing, ringState.snoozed) { _, _, _, _, _ -> }
                 .conflate()
                 .collect {
                     // A failed run, for example a storage error, must not end the collection.
@@ -90,7 +91,8 @@ class AlarmManagerScheduler(
             bookkeeping("in-flight wait") { awaitRingInFlight() }
             val now = clock.instant()
             val activeSession = activeSession(now)
-            val ringing = readOr(null) { ringState.currentRinging() }
+            // The ring in progress and the snoozed ones. A snoozed ring has not ended.
+            val ringing = listOfNotNull(readOr(null) { ringState.currentRinging() }) + readOr(emptyList()) { ringState.currentSnoozed() }
             val fired = firedRecords(now)
             val previous = readOr(emptyList()) { ringState.scheduled() }
             val check = checkMissed(previous, fired, now)
@@ -106,10 +108,10 @@ class AlarmManagerScheduler(
             val enabledIds = stored.filter { it.enabled }.mapTo(mutableSetOf()) { it.id }
             bookkeeping("fired cleanup") { ringState.retainFired(enabledIds) }
             val session = activeSession?.let { withoutLateConsentOf(it, it.acceptedLate.keys - enabledIds) }
-            // A one-shot alarm that is ringing has no next occurrence. The ring disables it when it ends.
+            // A one-shot alarm that is ringing or snoozed has no next occurrence. The ring disables it when it is dismissed.
             // Once it has been edited to another time it is a new occurrence and is planned like any other.
             val candidates = stored.filterNot { alarm ->
-                ringing != null && alarm.isOneShot && alarm.isOccurrence(ringing.alarmId, ringing.deadline)
+                alarm.isOneShot && ringing.any { alarm.isOccurrence(it.alarmId, it.deadline) }
             }
             val current = readOr(RemSettings.DEFAULT) { settings.current() }
             val firedOccurrences = fired.filter { (id, deadline) -> stored.any { it.isOccurrence(id, deadline) } }
@@ -200,11 +202,11 @@ class AlarmManagerScheduler(
      * Reports rings whose deadline passed without a fire, for example because the device
      * was off. A one-shot alarm among them is disabled, as its only occurrence is over,
      * unless it has been edited to another time since. An alarm that was deleted or
-     * switched off in the meantime is not reported, and neither is the one that is ringing.
+     * switched off in the meantime is not reported, and neither is one that is ringing or snoozed.
      */
-    private suspend fun reportMissed(missed: List<ScheduledRing>, ringing: RingingRecord?) {
+    private suspend fun reportMissed(missed: List<ScheduledRing>, ringing: List<RingingRecord>) {
         for (ring in missed) {
-            if (ring.alarmId == ringing?.alarmId) continue
+            if (ringing.any { it.alarmId == ring.alarmId }) continue
             bookkeeping("missed report") {
                 val alarm = alarms.get(ring.alarmId)?.takeIf { it.enabled } ?: return@bookkeeping
                 notifier.notifyMissed(MissedAlarm(alarm.id, alarm.label, ring.deadline, MissedReason.NOT_FIRED))

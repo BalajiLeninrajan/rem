@@ -13,7 +13,7 @@ import dev.balaji.rem.ui.AppLinks
 import java.time.Instant
 import java.util.Date
 
-/** Builds and posts the two notifications of the ring package. Holds no state. */
+/** Builds and posts the notifications of the ring package. Holds no state. */
 internal class RingNotifications(private val context: Context) : AlarmNotifier {
     private val manager: NotificationManager = context.getSystemService(NotificationManager::class.java)
 
@@ -36,11 +36,27 @@ internal class RingNotifications(private val context: Context) : AlarmNotifier {
         ).apply {
             description = context.getString(R.string.ring_channel_missed_description)
         }
-        manager.createNotificationChannels(listOf(ringing, missed))
+        val snoozed = NotificationChannel(
+            RingContract.CHANNEL_SNOOZED,
+            context.getString(R.string.ring_channel_snoozed_name),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = context.getString(R.string.ring_channel_snoozed_description)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+        manager.createNotificationChannels(listOf(ringing, missed, snoozed))
     }
 
     override fun notifyMissed(missed: MissedAlarm) {
         manager.notify(missed.alarmId.toString(), RingContract.NOTIFICATION_ID_MISSED, missedNotification(missed))
+    }
+
+    override fun notifySnoozed(snoozed: SnoozedAlarm) {
+        manager.notify(snoozed.alarmId.toString(), RingContract.NOTIFICATION_ID_SNOOZED, snoozedNotification(snoozed))
+    }
+
+    override fun cancelSnoozed(alarmId: Long) {
+        manager.cancel(alarmId.toString(), RingContract.NOTIFICATION_ID_SNOOZED)
     }
 
     /**
@@ -78,6 +94,32 @@ internal class RingNotifications(private val context: Context) : AlarmNotifier {
             .setFullScreenIntent(open, true)
             .setDeleteIntent(swipedAway)
             .addAction(0, context.getString(R.string.ring_action_scan), open)
+            .build()
+    }
+
+    /**
+     * The ongoing "snoozed until" notification of one alarm. Its tap opens the ringing
+     * screen, which shows the snooze and offers to dismiss it now.
+     */
+    internal fun snoozedNotification(snoozed: SnoozedAlarm): Notification {
+        val time = DateFormat.getTimeFormat(context).format(Date.from(snoozed.until))
+        val open = PendingIntent.getActivity(
+            context,
+            snoozed.alarmId.hashCode(),
+            RingContract.activityIntent(context),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        return NotificationCompat.Builder(context, RingContract.CHANNEL_SNOOZED)
+            .setSmallIcon(R.drawable.ic_ring_notification)
+            .setContentTitle(snoozed.label.ifBlank { context.getString(R.string.ring_default_label) })
+            .setContentText(context.getString(R.string.ring_snoozed_notification_text, time))
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setContentIntent(open)
             .build()
     }
 

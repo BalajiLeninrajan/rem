@@ -10,6 +10,7 @@ import dev.balaji.rem.data.SleepSessionRepository
 import dev.balaji.rem.ring.DismissResult
 import dev.balaji.rem.ring.RingController
 import dev.balaji.rem.ring.RingingState
+import dev.balaji.rem.ring.SnoozeResult
 import dev.balaji.rem.schedule.AlarmBroadcast
 import dev.balaji.rem.schedule.AlarmScheduler
 import java.time.Clock
@@ -75,9 +76,15 @@ class FakeAlarmScheduler(
 class FakeRingController : RingController {
     override val state = MutableStateFlow<RingingState>(RingingState.Idle)
 
+    override val snoozed = MutableStateFlow<List<RingingState.Snoozed>>(emptyList())
+
     override fun startRinging(ring: ScheduledRing): Boolean = false
 
     override fun resumeRinging(ring: ScheduledRing) = Unit
+
+    override fun endSnooze(ring: ScheduledRing) = Unit
+
+    override suspend fun snooze(): SnoozeResult = SnoozeResult.NOT_RINGING
 
     override suspend fun dismissWithBarcode(scanned: ScannedCode): DismissResult = DismissResult.NOT_RINGING
 

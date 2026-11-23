@@ -14,6 +14,9 @@ object AlarmBroadcast {
     /** Sent by the watchdog entry that is kept ahead of a live ring. Asks to pick that ring up again. */
     const val ACTION_RESUME = "dev.balaji.rem.action.ALARM_RESUME"
 
+    /** Sent by the entry of a snoozed ring when the snooze is over. Asks to ring that ring again. */
+    const val ACTION_SNOOZE_END = "dev.balaji.rem.action.SNOOZE_END"
+
     const val EXTRA_ALARM_ID = "dev.balaji.rem.extra.ALARM_ID"
 
     /** Epoch milliseconds. */
@@ -47,6 +50,17 @@ object AlarmBroadcast {
         Intent(context, AlarmReceiver::class.java)
             .setAction(ACTION_RESUME)
             .setData(Uri.parse("rem://resume"))
+            .putScheduledRing(ring)
+
+    /**
+     * The intent of the entry of a snoozed ring. Its own action and a data URI per alarm
+     * keep its PendingIntent apart from the alarm's own entry and from the watchdog, so a
+     * reschedule never replaces or cancels it, and two snoozed alarms keep one entry each.
+     */
+    fun snoozeIntent(context: Context, ring: ScheduledRing): Intent =
+        Intent(context, AlarmReceiver::class.java)
+            .setAction(ACTION_SNOOZE_END)
+            .setData(Uri.parse("rem://snooze/${ring.alarmId}"))
             .putScheduledRing(ring)
 }
 

@@ -53,7 +53,10 @@ val LATE_WINDOW: Duration = Duration.ofMinutes(30)
 
 /** Time limits of one ring. */
 object RingLimits {
-    /** Safety limit on one ring. After this the ring stops and counts as missed. */
+    /**
+     * Safety limit on one ringing stretch: the first ring, or a ring after a snooze. After
+     * this the ring stops and counts as missed.
+     */
     val MAX_RING: Duration = Duration.ofMinutes(30)
 
     /**

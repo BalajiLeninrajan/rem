@@ -30,6 +30,8 @@ abstract class RingStateStoreContract {
         assertNull(store.ringing.first())
         assertTrue(store.lastFired().isEmpty())
         assertTrue(store.scheduled().isEmpty())
+        assertTrue(store.currentSnoozed().isEmpty())
+        assertTrue(store.snoozed.first().isEmpty())
     }
 
     @Test
@@ -104,6 +106,80 @@ abstract class RingStateStoreContract {
         assertTrue(store.clearRinging(withBarcodes))
         store.setRinging(record)
         assertEquals(emptyList<BarcodeKey>(), store.currentRinging()?.barcodes)
+    }
+
+    @Test
+    fun `a ring keeps its snooze count across a write and a clear`() = runTest {
+        val store = createStore()
+        val snoozedTwice = record.copy(snoozes = 2)
+
+        store.setRinging(snoozedTwice)
+
+        assertEquals(snoozedTwice, store.currentRinging())
+        assertFalse(store.clearRinging(record))
+        assertTrue(store.clearRinging(snoozedTwice))
+        store.setRinging(record)
+        assertEquals(0, store.currentRinging()?.snoozes)
+    }
+
+    @Test
+    fun `a snooze moves the ring to the snoozed rings in one write`() = runTest {
+        val store = createStore()
+        val keys = listOf(BarcodeKey(BarcodeFormat.QR_CODE, "Kitchen"))
+        val ringing = record.copy(requiresBarcode = true, barcodes = keys, snoozes = 1)
+        val snoozed = ringing.copy(snoozes = 2, snoozedUntil = deadline.plusMillis(300_250))
+        store.setRinging(ringing)
+
+        store.snooze(ringing, snoozed)
+
+        assertNull(store.currentRinging())
+        assertEquals(listOf(snoozed), store.currentSnoozed())
+        assertEquals(listOf(snoozed), store.snoozed.first())
+    }
+
+    @Test
+    fun `a snooze leaves a newer ringing record alone and replaces the alarm's earlier snooze`() = runTest {
+        val store = createStore()
+        val other = record.copy(alarmId = 2)
+        val first = record.copy(snoozes = 1, snoozedUntil = deadline.plusSeconds(60))
+        val second = record.copy(snoozes = 2, snoozedUntil = deadline.plusSeconds(600))
+        store.snooze(record, first)
+        store.setRinging(other)
+
+        store.snooze(record, second)
+
+        assertEquals(other, store.currentRinging())
+        assertEquals(listOf(second), store.currentSnoozed())
+    }
+
+    @Test
+    fun `several alarms can be snoozed at once and each is cleared on its own`() = runTest {
+        val store = createStore()
+        val one = record.copy(snoozes = 1, snoozedUntil = deadline.plusSeconds(300))
+        val two = record.copy(alarmId = 2, requiresBarcode = false, snoozes = 3, snoozedUntil = deadline.plusSeconds(600))
+        store.snooze(record, one)
+        store.snooze(record.copy(alarmId = 2), two)
+
+        assertEquals(setOf(one, two), store.currentSnoozed().toSet())
+        assertFalse(store.clearSnoozed(one.copy(snoozes = 2)))
+        assertTrue(store.clearSnoozed(one))
+        assertFalse(store.clearSnoozed(one))
+        assertEquals(listOf(two), store.currentSnoozed())
+    }
+
+    @Test
+    fun `a ring that starts again drops the snooze of its alarm and keeps the others`() = runTest {
+        val store = createStore()
+        val one = record.copy(snoozes = 1, snoozedUntil = deadline.plusSeconds(300))
+        val two = record.copy(alarmId = 2, snoozes = 1, snoozedUntil = deadline.plusSeconds(600))
+        store.snooze(record, one)
+        store.snooze(record.copy(alarmId = 2), two)
+        val again = record.copy(startedAt = deadline.plusSeconds(300), snoozes = 1)
+
+        store.setRinging(again)
+
+        assertEquals(again, store.currentRinging())
+        assertEquals(listOf(two), store.currentSnoozed())
     }
 
     @Test

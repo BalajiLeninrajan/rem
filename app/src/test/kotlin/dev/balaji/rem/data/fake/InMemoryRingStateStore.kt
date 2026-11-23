@@ -6,22 +6,58 @@ import dev.balaji.rem.data.RingingRecord
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
 class InMemoryRingStateStore : RingStateStore {
-    private val ringingState = MutableStateFlow<RingingRecord?>(null)
+    /** The ringing record and the snoozed ones, in one value so a snooze moves a ring in one step. */
+    private data class Rings(val ringing: RingingRecord? = null, val snoozed: List<RingingRecord> = emptyList())
+
+    private val rings = MutableStateFlow(Rings())
     private val fired = MutableStateFlow<Map<Long, Instant>>(emptyMap())
     private val scheduledRings = MutableStateFlow<List<ScheduledRing>>(emptyList())
 
-    override val ringing: Flow<RingingRecord?> = ringingState
+    override val ringing: Flow<RingingRecord?> = rings.map { it.ringing }.distinctUntilChanged()
 
-    override suspend fun currentRinging(): RingingRecord? = ringingState.value
+    override val snoozed: Flow<List<RingingRecord>> = rings.map { it.snoozed }.distinctUntilChanged()
+
+    override suspend fun currentRinging(): RingingRecord? = rings.value.ringing
 
     override suspend fun setRinging(record: RingingRecord) {
-        ringingState.value = record
+        rings.update { current ->
+            Rings(record.copy(snoozedUntil = null), current.snoozed.filterNot { it.alarmId == record.alarmId })
+        }
     }
 
-    override suspend fun clearRinging(expected: RingingRecord): Boolean = ringingState.compareAndSet(expected, null)
+    override suspend fun clearRinging(expected: RingingRecord): Boolean {
+        var cleared = false
+        rings.update { current ->
+            cleared = current.ringing == expected
+            if (cleared) current.copy(ringing = null) else current
+        }
+        return cleared
+    }
+
+    override suspend fun currentSnoozed(): List<RingingRecord> = rings.value.snoozed
+
+    override suspend fun snooze(ringing: RingingRecord, snoozed: RingingRecord) {
+        rings.update { current ->
+            Rings(
+                ringing = current.ringing.takeUnless { it == ringing },
+                snoozed = current.snoozed.filterNot { it.alarmId == snoozed.alarmId } + snoozed,
+            )
+        }
+    }
+
+    override suspend fun clearSnoozed(expected: RingingRecord): Boolean {
+        var cleared = false
+        rings.update { current ->
+            cleared = expected in current.snoozed
+            if (cleared) current.copy(snoozed = current.snoozed - expected) else current
+        }
+        return cleared
+    }
 
     override suspend fun lastFired(): Map<Long, Instant> = fired.value
 
