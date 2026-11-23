@@ -43,7 +43,7 @@ import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** The time, the alarm label, the "five more minutes" button that opens the scanner, and the "can't scan?" link. */
+/** The time, the alarm label, the "scan to dismiss" button that opens the scanner, and the "can't scan?" link. */
 @Composable
 fun RingingScreen(
     onOpenScanner: () -> Unit,
@@ -129,7 +129,7 @@ private fun RingActions(
 ) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         if (requiresBarcode) {
-            BigButton(text = stringResource(R.string.ring_five_more_minutes), onClick = onOpenScanner)
+            BigButton(text = stringResource(R.string.ring_scan_to_dismiss), onClick = onOpenScanner)
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onOpenTypedFallback) {
                 Text(stringResource(R.string.ring_cant_scan))

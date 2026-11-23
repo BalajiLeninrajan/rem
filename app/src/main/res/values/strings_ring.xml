@@ -17,7 +17,7 @@
     <string name="ring_missed_timed_out">The %1$s alarm rang for 30 minutes and then stopped.</string>
     <string name="ring_missed_other_ringing">The %1$s alarm came due while another alarm was ringing, so it did not ring by itself.</string>
 
-    <string name="ring_five_more_minutes">five more minutes</string>
+    <string name="ring_scan_to_dismiss">scan to dismiss</string>
     <string name="ring_cant_scan">can\'t scan?</string>
     <string name="ring_stop_alarm">Stop alarm</string>
     <string name="ring_no_barcode_hint">This alarm has no barcode, so this button stops it.</string>
