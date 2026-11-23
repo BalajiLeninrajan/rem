@@ -32,9 +32,11 @@ class DataStoreSettingsRepository(private val store: DataStore<Preferences>) : S
         val FALL_ASLEEP_MINUTES = intPreferencesKey("fall_asleep_minutes")
         val EARLY_WINDOW_MINUTES = intPreferencesKey("early_window_minutes")
         val SPEAKER_FALLBACK_SECONDS = intPreferencesKey("speaker_fallback_seconds")
-        val MIN_RING_VOLUME_PERCENT = intPreferencesKey("min_ring_volume_percent")
-        val VOLUME_RAMP_SECONDS = intPreferencesKey("volume_ramp_seconds")
+        val HEADPHONES_ONLY = booleanPreferencesKey("headphones_only")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+
+        /** Version 1 kept the volume floor and ramp here. Each alarm has its own now, so the next write removes them. */
+        val VERSION_1_KEYS = listOf(intPreferencesKey("min_ring_volume_percent"), intPreferencesKey("volume_ramp_seconds"))
 
         /** A missing key reads as its default. The result is coerced, in case the file holds values from another version. */
         fun Preferences.toSettings(): RemSettings {
@@ -44,8 +46,7 @@ class DataStoreSettingsRepository(private val store: DataStore<Preferences>) : S
                 fallAsleepMinutes = this[FALL_ASLEEP_MINUTES] ?: default.fallAsleepMinutes,
                 earlyWindowMinutes = this[EARLY_WINDOW_MINUTES] ?: default.earlyWindowMinutes,
                 speakerFallbackSeconds = this[SPEAKER_FALLBACK_SECONDS] ?: default.speakerFallbackSeconds,
-                minRingVolumePercent = this[MIN_RING_VOLUME_PERCENT] ?: default.minRingVolumePercent,
-                volumeRampSeconds = this[VOLUME_RAMP_SECONDS] ?: default.volumeRampSeconds,
+                headphonesOnly = this[HEADPHONES_ONLY] ?: default.headphonesOnly,
             ).coerced()
         }
 
@@ -54,8 +55,8 @@ class DataStoreSettingsRepository(private val store: DataStore<Preferences>) : S
             this[FALL_ASLEEP_MINUTES] = settings.fallAsleepMinutes
             this[EARLY_WINDOW_MINUTES] = settings.earlyWindowMinutes
             this[SPEAKER_FALLBACK_SECONDS] = settings.speakerFallbackSeconds
-            this[MIN_RING_VOLUME_PERCENT] = settings.minRingVolumePercent
-            this[VOLUME_RAMP_SECONDS] = settings.volumeRampSeconds
+            this[HEADPHONES_ONLY] = settings.headphonesOnly
+            VERSION_1_KEYS.forEach { remove(it) }
         }
     }
 }

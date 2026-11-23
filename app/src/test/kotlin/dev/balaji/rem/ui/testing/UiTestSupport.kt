@@ -87,5 +87,9 @@ class FakeRingController : RingController {
 
     override fun newFallbackCode(): String = ""
 
+    override fun startQuietPeriod() = Unit
+
+    override fun endQuietPeriod() = Unit
+
     override suspend fun recoverInterruptedRing() = Unit
 }

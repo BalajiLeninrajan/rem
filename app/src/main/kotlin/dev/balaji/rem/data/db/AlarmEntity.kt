@@ -14,11 +14,35 @@ data class AlarmEntity(
     val label: String,
     @ColumnInfo(name = "repeat_days") val repeatDays: Set<DayOfWeek>,
     val enabled: Boolean,
-    @ColumnInfo(name = "headphones_only") val headphonesOnly: Boolean,
     val vibrate: Boolean,
     @ColumnInfo(name = "ringtone_uri") val ringtoneUri: String?,
+    @ColumnInfo(name = "min_ring_volume_percent") val minRingVolumePercent: Int,
+    @ColumnInfo(name = "volume_ramp_seconds") val volumeRampSeconds: Int,
 )
 
-fun AlarmEntity.toAlarm() = Alarm(id, time, label, repeatDays, enabled, headphonesOnly, vibrate, ringtoneUri)
+fun AlarmEntity.toAlarm() = Alarm(
+    id = id,
+    time = time,
+    label = label,
+    repeatDays = repeatDays,
+    enabled = enabled,
+    vibrate = vibrate,
+    ringtoneUri = ringtoneUri,
+    minRingVolumePercent = minRingVolumePercent,
+    volumeRampSeconds = volumeRampSeconds,
+).coerced()
 
-fun Alarm.toEntity() = AlarmEntity(id, time, label, repeatDays, enabled, headphonesOnly, vibrate, ringtoneUri)
+fun Alarm.toEntity(): AlarmEntity {
+    val alarm = coerced()
+    return AlarmEntity(
+        id = alarm.id,
+        time = alarm.time,
+        label = alarm.label,
+        repeatDays = alarm.repeatDays,
+        enabled = alarm.enabled,
+        vibrate = alarm.vibrate,
+        ringtoneUri = alarm.ringtoneUri,
+        minRingVolumePercent = alarm.minRingVolumePercent,
+        volumeRampSeconds = alarm.volumeRampSeconds,
+    )
+}

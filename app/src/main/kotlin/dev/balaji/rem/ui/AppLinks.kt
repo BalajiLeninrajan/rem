@@ -41,7 +41,7 @@ object AppLinks {
     /** The route [intent] asks for, to navigate to on top of home, or null for home itself. */
     fun routeFor(intent: Intent): Any? = when (intent.getStringExtra(EXTRA_DESTINATION)) {
         DESTINATION_EDIT_ALARM ->
-            intent.getLongExtra(EXTRA_ALARM_ID, Alarm.NEW_ID).takeIf { it > Alarm.NEW_ID }?.let(::AlarmEditorRoute)
+            intent.getLongExtra(EXTRA_ALARM_ID, Alarm.NEW_ID).takeIf { it > Alarm.NEW_ID }?.let { AlarmEditorRoute(alarmId = it) }
         DESTINATION_RELIABILITY -> ReliabilityRoute
         else -> null
     }

@@ -66,7 +66,7 @@ class HeadphoneRoutingTest {
     }
 
     @Test
-    fun `an alarm without headphones only uses default routing even with headphones connected`() {
+    fun `with headphones only off the ring uses default routing even with headphones connected`() {
         assertEquals(
             RouteState.Speaker(SpeakerReason.NOT_REQUESTED),
             route(RouteState.Undecided, headphonesOnly = false),

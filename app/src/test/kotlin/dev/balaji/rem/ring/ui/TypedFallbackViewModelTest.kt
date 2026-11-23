@@ -5,7 +5,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class TypedFallbackViewModelTest {
-    private val viewModel = TypedFallbackViewModel(IdleRingController())
+    private val controller = IdleRingController()
+    private val viewModel = TypedFallbackViewModel(controller)
+
+    @Test
+    fun `a typed fallback screen made from saved state leaves the ring loud`() {
+        assertEquals(0, controller.quietPeriodsStarted)
+    }
 
     @Test
     fun `typing one character at a time is accepted and counted`() {

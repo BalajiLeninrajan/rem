@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.balaji.rem.RemApplication
 
@@ -27,4 +28,18 @@ val LocalAppContainer = staticCompositionLocalOf<AppContainer> {
 inline fun <reified VM : ViewModel> containerViewModel(noinline create: (AppContainer) -> VM): VM {
     val container = LocalAppContainer.current
     return viewModel { create(container) }
+}
+
+/**
+ * Like the other `containerViewModel`, scoped to [owner] instead. A screen uses it to reach
+ * the view model of a screen below it on the back stack. [create] runs only when [owner]
+ * has no view model of this class yet.
+ */
+@Composable
+inline fun <reified VM : ViewModel> containerViewModel(
+    owner: ViewModelStoreOwner,
+    noinline create: (AppContainer) -> VM,
+): VM {
+    val container = LocalAppContainer.current
+    return viewModel(viewModelStoreOwner = owner) { create(container) }
 }

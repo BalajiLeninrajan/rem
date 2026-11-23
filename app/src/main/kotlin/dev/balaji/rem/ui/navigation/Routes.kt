@@ -7,15 +7,19 @@ import kotlinx.serialization.Serializable
 @Serializable
 data object HomeRoute
 
-/** @property alarmId [Alarm.NEW_ID] creates a new alarm. */
+/**
+ * @property alarmId [Alarm.NEW_ID] creates a new alarm.
+ * @property copyFromId for a new alarm, the stored alarm whose settings and barcodes it starts
+ *   from. [Alarm.NEW_ID] starts from the defaults.
+ */
 @Serializable
-data class AlarmEditorRoute(val alarmId: Long = Alarm.NEW_ID)
+data class AlarmEditorRoute(val alarmId: Long = Alarm.NEW_ID, val copyFromId: Long = Alarm.NEW_ID)
 
-/** List of registered barcodes with rename and delete. */
-@Serializable
-data object BarcodesRoute
-
-/** @property testOnly true checks a scan against the registered barcodes, false registers what is scanned. */
+/**
+ * The scanner for the alarm in the [AlarmEditorRoute] right below it. Opened only from the editor.
+ *
+ * @property testOnly true checks a scan against the alarm's barcodes, false adds what is scanned to the alarm.
+ */
 @Serializable
 data class BarcodeScanRoute(val testOnly: Boolean = false)
 

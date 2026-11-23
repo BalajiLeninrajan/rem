@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import dev.balaji.rem.core.BarcodeFormat
+import dev.balaji.rem.core.BarcodeKey
 import dev.balaji.rem.core.ScheduledRing
 import dev.balaji.rem.data.RingStateStore
 import dev.balaji.rem.data.RingingRecord
@@ -24,8 +26,9 @@ import kotlinx.serialization.json.Json
 
 /**
  * Layout of the file: the ringing record is four long keys that exist together or not at
- * all plus one boolean that counts as true when it is absent, each fired deadline is one long key named `fired_<alarm id>`, and the scheduled
- * rings are one JSON string because their order is kept.
+ * all, one boolean that counts as true when it is absent, and one JSON string of barcodes
+ * that counts as no barcodes when it is absent. Each fired deadline is one long key named
+ * `fired_<alarm id>`, and the scheduled rings are one JSON string because their order is kept.
  */
 class DataStoreRingStateStore(private val store: DataStore<Preferences>) : RingStateStore {
     override val ringing: Flow<RingingRecord?> = store.data.map { it.ringingRecord() }.distinctUntilChanged()
@@ -39,6 +42,11 @@ class DataStoreRingStateStore(private val store: DataStore<Preferences>) : RingS
             it[RINGING_RING_AT] = record.ringAt.toEpochMilli()
             it[RINGING_DEADLINE] = record.deadline.toEpochMilli()
             it[RINGING_REQUIRES_BARCODE] = record.requiresBarcode
+            if (record.barcodes.isEmpty()) {
+                it.remove(RINGING_BARCODES)
+            } else {
+                it[RINGING_BARCODES] = encodeBarcodes(record.barcodes)
+            }
         }
     }
 
@@ -82,12 +90,16 @@ class DataStoreRingStateStore(private val store: DataStore<Preferences>) : RingS
     @Serializable
     private data class StoredRing(val alarmId: Long, val ringAtMs: Long, val deadlineMs: Long)
 
+    @Serializable
+    private data class StoredBarcode(val format: String, val value: String)
+
     private companion object {
         val RINGING_ALARM_ID = longPreferencesKey("ringing_alarm_id")
         val RINGING_STARTED_AT = longPreferencesKey("ringing_started_at_ms")
         val RINGING_RING_AT = longPreferencesKey("ringing_ring_at_ms")
         val RINGING_DEADLINE = longPreferencesKey("ringing_deadline_ms")
         val RINGING_REQUIRES_BARCODE = booleanPreferencesKey("ringing_requires_barcode")
+        val RINGING_BARCODES = stringPreferencesKey("ringing_barcodes")
         val SCHEDULED = stringPreferencesKey("scheduled_rings")
         const val FIRED_PREFIX = "fired_"
 
@@ -100,6 +112,7 @@ class DataStoreRingStateStore(private val store: DataStore<Preferences>) : RingS
                 ringAt = Instant.ofEpochMilli(this[RINGING_RING_AT] ?: return null),
                 deadline = Instant.ofEpochMilli(this[RINGING_DEADLINE] ?: return null),
                 requiresBarcode = this[RINGING_REQUIRES_BARCODE] ?: true,
+                barcodes = this[RINGING_BARCODES]?.let { decodeBarcodes(it) }.orEmpty(),
             )
         }
 
@@ -109,6 +122,7 @@ class DataStoreRingStateStore(private val store: DataStore<Preferences>) : RingS
             remove(RINGING_RING_AT)
             remove(RINGING_DEADLINE)
             remove(RINGING_REQUIRES_BARCODE)
+            remove(RINGING_BARCODES)
         }
 
         fun RingingRecord.atMillis() = copy(
@@ -123,6 +137,18 @@ class DataStoreRingStateStore(private val store: DataStore<Preferences>) : RingS
                 val alarmId = key.name.removePrefix(FIRED_PREFIX).toLongOrNull() ?: continue
                 put(alarmId, Instant.ofEpochMilli(value))
             }
+        }
+
+        fun encodeBarcodes(barcodes: List<BarcodeKey>): String =
+            Json.encodeToString(barcodes.map { StoredBarcode(it.format.name, it.value) })
+
+        /** An unreadable list counts as empty, and a format this version does not know is left out. */
+        fun decodeBarcodes(encoded: String): List<BarcodeKey> = try {
+            Json.decodeFromString<List<StoredBarcode>>(encoded).mapNotNull { stored ->
+                BarcodeFormat.entries.firstOrNull { it.name == stored.format }?.let { BarcodeKey(it, stored.value) }
+            }
+        } catch (_: SerializationException) {
+            emptyList()
         }
 
         /** An unreadable list counts as empty. The next reschedule writes a fresh one. */

@@ -70,10 +70,10 @@ class AlarmFlowTest {
         // largest early window (90 minutes) ahead of the clock would be dropped as impossible.
         container.settingsRepository.update { it.copy(cycleMinutes = 60, fallAsleepMinutes = 0) }
         val wakeBy = start.plus(Duration.ofMinutes(75)).atZone(container.clock.zone).toLocalTime().truncatedTo(ChronoUnit.MINUTES)
-        container.barcodeRepository.add(Barcode(label = "toothpaste", format = BarcodeFormat.EAN_13, value = "0036000291452"))
+        val registered = Barcode(label = "toothpaste", format = BarcodeFormat.EAN_13, value = "0036000291452")
 
         // Saving is all the editor does. The scheduler watches the repository.
-        val id = container.alarmRepository.upsert(Alarm(time = wakeBy, label = "work"))
+        val id = container.alarmRepository.upsertWithBarcodes(Alarm(time = wakeBy, label = "work"), listOf(registered))
         val atDeadline = container.alarmScheduler.plan.mapNotNull { it.forAlarm(id) }.first()
         assertEquals(WakeExplanation.AtDeadline(DeadlineReason.NO_SESSION), atDeadline.explanation)
         assertEquals(atDeadline.deadline.toEpochMilli(), alarmManager.nextAlarmClock.triggerTime)
@@ -118,7 +118,7 @@ class AlarmFlowTest {
     }
 
     @Test
-    fun `the test alarm rings without a stored alarm and stops with the plain button when no barcode is registered`() = wholeFlow {
+    fun `the test alarm rings without a stored alarm and stops with the plain button, since it has no barcodes`() = wholeFlow {
         container.sleepSessionRepository.start(container.clock.instant())
 
         val ringAt = container.alarmScheduler.scheduleTestAlarm()!!

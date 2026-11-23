@@ -57,8 +57,8 @@ fun WarningBanner(
 private fun WarningBannerPreview() {
     RemTheme {
         WarningBanner(
-            message = "No barcode is registered. Alarms can be dismissed with a plain button.",
-            actionLabel = "Add a barcode",
+            message = "An alarm is ringing. It stops only from the ringing screen.",
+            actionLabel = "Open the ringing screen",
             onAction = {},
         )
     }

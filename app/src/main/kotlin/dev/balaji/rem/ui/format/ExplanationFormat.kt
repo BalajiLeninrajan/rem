@@ -24,6 +24,14 @@ fun wakeExplanationText(explanation: WakeExplanation, deadline: Instant, zone: Z
         } else {
             pluralStringResource(R.plurals.ui_explain_cycles_on_deadline, explanation.cycles, explanation.cycles)
         }
+    is WakeExplanation.LateCycles ->
+        pluralStringResource(
+            R.plurals.ui_explain_cycles_late,
+            explanation.cycles,
+            explanation.cycles,
+            explanation.minutesAfterDeadline,
+            clockText(deadline, zone),
+        )
     is WakeExplanation.AtDeadline -> stringResource(
         when (explanation.reason) {
             DeadlineReason.NO_SESSION -> R.string.ui_explain_no_session

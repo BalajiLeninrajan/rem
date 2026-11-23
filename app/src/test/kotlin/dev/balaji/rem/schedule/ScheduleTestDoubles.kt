@@ -69,6 +69,10 @@ class RecordingRingController : RingController {
 
     override fun newFallbackCode() = ""
 
+    override fun startQuietPeriod() = Unit
+
+    override fun endQuietPeriod() = Unit
+
     override suspend fun recoverInterruptedRing() = Unit
 }
 
@@ -87,8 +91,8 @@ class RecordingScheduler(private val ringState: RingStateStore) : AlarmScheduler
 
 class FakeAppContainer(override val applicationScope: CoroutineScope) : AppContainer {
     override val clock: Clock = Clock.systemUTC()
-    override val alarmRepository = InMemoryAlarmRepository()
     override val barcodeRepository = InMemoryBarcodeRepository()
+    override val alarmRepository = InMemoryAlarmRepository(barcodes = barcodeRepository)
     override val settingsRepository = InMemorySettingsRepository()
     override val sleepSessionRepository = InMemorySleepSessionRepository()
     override val ringStateStore = InMemoryRingStateStore()

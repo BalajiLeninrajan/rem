@@ -31,7 +31,7 @@ class DataModuleTest {
         val alarm = Alarm(time = LocalTime.of(7, 0), label = "work")
 
         val alarmId = module.alarmRepository.upsert(alarm)
-        module.barcodeRepository.add(Barcode(label = "mug", format = BarcodeFormat.QR_CODE, value = "mug"))
+        module.barcodeRepository.add(alarmId, Barcode(label = "mug", format = BarcodeFormat.QR_CODE, value = "mug"))
         module.settingsRepository.update { it.copy(cycleMinutes = 100) }
         module.sleepSessionRepository.start(Instant.parse("2026-01-15T04:00:00Z"))
         module.ringStateStore.markFired(alarmId, Instant.parse("2026-01-15T12:00:00Z"))

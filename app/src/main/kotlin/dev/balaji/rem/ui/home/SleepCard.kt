@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -78,11 +79,22 @@ private fun ReadyCard(preview: PlannedRing?, now: Instant, zone: ZoneId, onGoToS
                 text = if (preview == null) {
                     stringResource(R.string.ui_home_sleep_no_alarm)
                 } else {
-                    stringResource(
+                    val line = stringResource(
                         R.string.ui_home_sleep_preview,
                         ringTimeText(preview.ringAt, now, zone),
                         wakeExplanationText(preview.explanation, preview.deadline, zone),
                     )
+                    val late = preview.late
+                    if (late == null) {
+                        line
+                    } else {
+                        line + " " + pluralStringResource(
+                            R.plurals.ui_home_sleep_preview_late,
+                            late.cycles,
+                            ringTimeText(late.ringAt, now, zone),
+                            late.cycles,
+                        )
+                    }
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(horizontal = 4.dp),
