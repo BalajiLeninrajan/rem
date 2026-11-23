@@ -12,6 +12,7 @@ import java.time.ZoneOffset
  *   the plan has not caught up with a change yet.
  * @property ringing true while this alarm is ringing. The plan already points at the next
  *   occurrence then, so the card says "ringing" instead.
+ * @property snoozedUntil when this alarm rings again, while it is snoozed.
  * @property noBarcode true when the alarm has no barcode, so a plain button stops it.
  * @property late the late option of [nextRing] while a sleep session covers it, null when
  *   it has none. The card offers it, or the way back to the alarm time once accepted.
@@ -20,6 +21,7 @@ data class AlarmRow(
     val alarm: Alarm,
     val nextRing: PlannedRing?,
     val ringing: Boolean = false,
+    val snoozedUntil: Instant? = null,
     val noBarcode: Boolean = false,
     val late: LateSwitch? = null,
 )
@@ -62,6 +64,8 @@ data class HomeUiState(
     val sleep: SleepState = SleepState.Hidden,
     /** True while any alarm rings, including the test alarm, which has no card. */
     val ringing: Boolean = false,
+    /** When the first snoozed ring rings again, including one of the test alarm. Null when none is snoozed. */
+    val snoozedUntil: Instant? = null,
     /** Reliability checks that fail right now, not counting alarms without a barcode. Their cards say so. */
     val reliabilityProblems: Int = 0,
     /** True once, on first run, until the onboarding screen has been opened. */

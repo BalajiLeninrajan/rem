@@ -64,8 +64,14 @@ class HomeViewModel(
         Stored(storedAlarms, storedBarcodes, storedSettings, session, onboardingDone)
     }
 
-    private val live = combine(scheduler.plan, ringController.state, now, system) { plan, ringing, instant, checks ->
-        Live(plan, (ringing as? RingingState.Ringing)?.alarmId, instant, checks)
+    private val live = combine(
+        scheduler.plan,
+        ringController.state,
+        ringController.snoozed,
+        now,
+        system,
+    ) { plan, ringing, snoozed, instant, checks ->
+        Live(plan, (ringing as? RingingState.Ringing)?.alarmId, snoozed.associate { it.alarmId to it.until }, instant, checks)
     }
 
     private val local = combine(recentlyDeleted, onboardingOpened, latePrompt) { deleted, opened, prompt ->
@@ -195,6 +201,7 @@ class HomeViewModel(
                     alarm = alarm,
                     nextRing = nextRing,
                     ringing = ringing,
+                    snoozedUntil = if (ringing) null else live.snoozedUntil[alarm.id],
                     noBarcode = stored.barcodes[alarm.id].isNullOrEmpty(),
                     late = if (ringing) null else nextRing?.lateSwitch(session, live.now),
                 )
@@ -205,6 +212,7 @@ class HomeViewModel(
                 else -> SleepState.Hidden
             },
             ringing = live.ringingAlarmId != null,
+            snoozedUntil = live.snoozedUntil.values.minOrNull(),
             reliabilityProblems = reliabilityProblemCount(live.system, barcodeCoverage(stored.alarms, stored.barcodes)),
             onboardingNeeded = !stored.onboardingDone && !local.onboardingOpened,
             recentlyDeleted = local.recentlyDeleted,
@@ -222,7 +230,13 @@ class HomeViewModel(
         val onboardingDone: Boolean,
     )
 
-    private data class Live(val plan: SchedulePlan, val ringingAlarmId: Long?, val now: Instant, val system: SystemChecks)
+    private data class Live(
+        val plan: SchedulePlan,
+        val ringingAlarmId: Long?,
+        val snoozedUntil: Map<Long, Instant>,
+        val now: Instant,
+        val system: SystemChecks,
+    )
 
     private data class Local(val recentlyDeleted: Alarm?, val onboardingOpened: Boolean, val latePrompt: PendingLatePrompt?)
 

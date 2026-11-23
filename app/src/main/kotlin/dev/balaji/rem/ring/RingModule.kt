@@ -23,6 +23,7 @@ fun createRingController(context: Context, container: AppContainer): RingControl
         notifier = container.alarmNotifier,
         launcher = { ring -> ContextCompat.startForegroundService(context, RingContract.serviceIntent(context, ring)) },
         watchdog = AlarmClocks(context),
+        snoozeAlarms = AlarmClocks(context),
         reschedule = { container.alarmScheduler.rescheduleAll() },
         clock = container.clock,
         scope = container.applicationScope,

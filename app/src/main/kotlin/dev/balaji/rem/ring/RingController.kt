@@ -5,6 +5,10 @@ import dev.balaji.rem.core.ScheduledRing
 import java.time.Instant
 import kotlinx.coroutines.flow.StateFlow
 
+/**
+ * What the ringing screens show. [Ringing] while an alarm rings. Otherwise [Snoozed] for
+ * the snoozed ring that comes due first, or [Idle] when nothing is snoozed either.
+ */
 sealed interface RingingState {
     data object Idle : RingingState
 
@@ -15,6 +19,11 @@ sealed interface RingingState {
      *   shows a plain button.
      * @property quietUntil when the quiet period started by [RingController.startQuietPeriod]
      *   ends, or null while the alarm is loud.
+     * @property startedAt when this ringing stretch started: the first ring, or the ring
+     *   again after a snooze.
+     * @property snoozeMinutes how long [RingController.snooze] snoozes for.
+     * @property snoozesLeft how many more times this ring can be snoozed. 0 until the alarm
+     *   is loaded, and once the alarm's limit is used up. Then only a dismissal is left.
      */
     data class Ringing(
         val alarmId: Long,
@@ -23,7 +32,37 @@ sealed interface RingingState {
         val deadline: Instant,
         val requiresBarcode: Boolean,
         val quietUntil: Instant? = null,
+        val snoozeMinutes: Int = 0,
+        val snoozesLeft: Int = 0,
+    ) : RingingState {
+        val canSnooze: Boolean get() = snoozesLeft > 0
+    }
+
+    /**
+     * A ring that was snoozed and rings again at [until]. It can be dismissed before then,
+     * the same way as while it rings.
+     *
+     * @property snoozesLeft how many more snoozes the ring has once it rings again.
+     */
+    data class Snoozed(
+        val alarmId: Long,
+        val label: String,
+        val deadline: Instant,
+        val until: Instant,
+        val snoozesLeft: Int,
+        val requiresBarcode: Boolean,
     ) : RingingState
+}
+
+enum class SnoozeResult {
+    /** The ring stopped and rings again after the alarm's snooze length. */
+    SNOOZED,
+
+    /** The alarm is still loading, its snoozes are used up, or the snooze could not be set. Still ringing. */
+    REJECTED,
+
+    /** Nothing was ringing. */
+    NOT_RINGING,
 }
 
 enum class DismissResult {
@@ -38,8 +77,13 @@ enum class DismissResult {
 }
 
 /**
- * The one entry point to a ring, for the alarm receiver and for the ringing screens.
- * There is no snooze and no other way to stop a ring.
+ * The one entry point to a ring, for the alarm receiver, the ringing screens and the
+ * actions on the ringing notification.
+ *
+ * A snooze is not the end of a ring. It stops the tone, keeps the ring's record and rings
+ * again after the alarm's snooze length, through an alarm clock entry of its own. It
+ * neither ends the sleep session nor disables a one-shot alarm. Each ringing stretch, the
+ * first and each one after a snooze, has its own 30 minutes.
  *
  * When a ring ends, by dismissal or by the 30 minute limit, the implementation:
  * - stops the service and clears the persisted ringing record,
@@ -55,8 +99,11 @@ enum class DismissResult {
  * alarms nor the session.
  */
 interface RingController {
-    /** [RingingState.Idle] when nothing rings. Survives the ringing activity being closed and reopened. */
+    /** [RingingState.Idle] when nothing rings or is snoozed. Survives the ringing activity being closed and reopened. */
     val state: StateFlow<RingingState>
+
+    /** Every snoozed ring, the one that comes due first first. */
+    val snoozed: StateFlow<List<RingingState.Snoozed>>
 
     /**
      * Starts the foreground service for [ring]. Called by the alarm receiver inside
@@ -78,10 +125,28 @@ interface RingController {
      * Picks up a ring that was cut off by a process death or a reboot. Called by the
      * alarm receiver inside `onReceive` when the watchdog alarm clock entry fires. Rings
      * only if the persisted ringing record still describes [ring], and keeps that record's
-     * start time, so the 30 minute limit counts from the first start. Does nothing when
+     * start time, so the 30 minute limit counts from the start of the stretch. Does nothing when
      * the ring is still live.
      */
     fun resumeRinging(ring: ScheduledRing)
+
+    /**
+     * Called by the alarm receiver inside `onReceive` when the entry of a snoozed ring
+     * fires. Rings again if the snooze is still persisted, with a fresh 30 minutes. While
+     * another alarm rings the snooze waits and rings right after that ring ends.
+     */
+    fun endSnooze(ring: ScheduledRing)
+
+    /**
+     * Stops the tone and the vibration and rings again after the alarm's snooze length.
+     * Needs no barcode. Rejected while the alarm is loading and once its snoozes are used up.
+     */
+    suspend fun snooze(): SnoozeResult
+
+    /*
+     * The dismissals act on the ringing alarm. While nothing rings they act on the snoozed
+     * ring that [state] shows, and need what that ring needs.
+     */
 
     /** Dismisses when [scanned] is one of the ringing alarm's barcodes. The scanner has already required 2 consecutive frames. */
     suspend fun dismissWithBarcode(scanned: ScannedCode): DismissResult
@@ -105,7 +170,7 @@ interface RingController {
      * again when the period runs out without a dismissal, or at once on [endQuietPeriod].
      * The volume floor stays in force and the quiet time counts toward the 30 minute limit.
      * A ring picked up again after a process death starts loud. Does nothing when nothing
-     * rings. Must not suspend: called from the main thread.
+     * rings, also while a ring is snoozed. Must not suspend: called from the main thread.
      */
     fun startQuietPeriod()
 
@@ -120,6 +185,10 @@ interface RingController {
      * starts the service itself, because audio started on the boot path is muted.
      * Otherwise the record is cleared and a missed-alarm notification is posted. A
      * one-shot alarm is then disabled, unless its deadline is still ahead.
+     *
+     * Each persisted snooze gets its alarm clock entry again, at its time or a few seconds
+     * ahead when its time has passed. A snooze more than 30 minutes overdue is reported as
+     * missed instead.
      *
      * The alarm receiver can run while this is still in progress, so a ring that
      * [startRinging] began in this process must count as live from the moment that call returns.

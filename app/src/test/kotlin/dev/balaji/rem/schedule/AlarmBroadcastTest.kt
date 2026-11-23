@@ -11,6 +11,7 @@ import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -34,6 +35,19 @@ class AlarmBroadcastTest {
         val other = ring.copy(alarmId = 43)
 
         assertFalse(AlarmBroadcast.fireIntent(context, ring).filterEquals(AlarmBroadcast.fireIntent(context, other)))
+    }
+
+    @Test
+    fun `a snooze entry has its own identity per alarm, apart from the alarm and the watchdog`() {
+        val snooze = AlarmBroadcast.snoozeIntent(context, ring)
+
+        assertEquals(AlarmReceiver::class.java.name, snooze.component?.className)
+        assertEquals(AlarmBroadcast.ACTION_SNOOZE_END, snooze.action)
+        assertEquals(ring, snooze.scheduledRingOrNull())
+        assertFalse(snooze.filterEquals(AlarmBroadcast.fireIntent(context, ring)))
+        assertFalse(snooze.filterEquals(AlarmBroadcast.resumeIntent(context, ring)))
+        assertFalse(snooze.filterEquals(AlarmBroadcast.snoozeIntent(context, ring.copy(alarmId = 43))))
+        assertTrue(snooze.filterEquals(AlarmBroadcast.snoozeIntent(context, ring.copy(ringAt = deadline))))
     }
 
     @Test

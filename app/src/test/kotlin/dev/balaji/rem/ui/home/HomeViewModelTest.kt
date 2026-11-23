@@ -320,6 +320,40 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `a snoozed alarm says until when on its card and in the banner, unless it rings again`() = runTest {
+        val viewModel = viewModel()
+        val snoozed = alarms.upsert(Alarm(time = LocalTime.of(7, 0)))
+        val other = alarms.upsert(Alarm(time = LocalTime.of(8, 0)))
+        replan()
+        val until = at("2026-01-15T06:55")
+        val later = at("2026-01-15T07:05")
+
+        ringController.snoozed.value = listOf(
+            RingingState.Snoozed(snoozed, "", at("2026-01-15T07:00"), until, snoozesLeft = 2, requiresBarcode = true),
+            RingingState.Snoozed(AlarmBroadcast.TEST_ALARM_ID, "", later, later, snoozesLeft = 2, requiresBarcode = false),
+        )
+        advanceUntilIdle()
+
+        assertEquals(mapOf(snoozed to until, other to null), viewModel.state.value.alarms.associate { it.alarm.id to it.snoozedUntil })
+        assertEquals(until, viewModel.state.value.snoozedUntil)
+        assertFalse(viewModel.state.value.ringing)
+
+        ringController.snoozed.value = ringController.snoozed.value.drop(1)
+        ringController.state.value = RingingState.Ringing(
+            alarmId = snoozed,
+            label = "",
+            startedAt = clock.instant(),
+            deadline = at("2026-01-15T07:00"),
+            requiresBarcode = true,
+        )
+        advanceUntilIdle()
+
+        assertEquals(mapOf(snoozed to null, other to null), viewModel.state.value.alarms.associate { it.alarm.id to it.snoozedUntil })
+        assertEquals(later, viewModel.state.value.snoozedUntil)
+        assertTrue(viewModel.state.value.ringing)
+    }
+
+    @Test
     fun `a ringing test alarm has no card but is still reported`() = runTest {
         val viewModel = viewModel()
         val id = alarms.upsert(Alarm(time = LocalTime.of(7, 0)))

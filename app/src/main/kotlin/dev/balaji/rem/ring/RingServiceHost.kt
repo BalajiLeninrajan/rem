@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * @property minRingVolumePercent see [dev.balaji.rem.core.Alarm.minRingVolumePercent].
  * @property volumeRampSeconds 0 disables the ramp.
+ * @property requiresBarcode false when a plain dismissal works. The notification then offers it.
+ * @property snoozeMinutes how long a snooze lasts.
+ * @property snoozesLeft 0 when the notification offers no snooze.
  */
 internal data class RingSpec(
     val alarmId: Long,
@@ -21,6 +24,9 @@ internal data class RingSpec(
     val headphonesOnly: Boolean,
     val speakerFallbackSeconds: Int,
     val startedAt: Instant,
+    val requiresBarcode: Boolean = true,
+    val snoozeMinutes: Int = 0,
+    val snoozesLeft: Int = 0,
 )
 
 /** What [RingingService] should be doing right now. */
@@ -60,6 +66,17 @@ internal interface RingWatchdog {
     fun arm(ring: ScheduledRing, at: Instant): Boolean
 
     fun cancel()
+}
+
+/**
+ * One alarm clock entry per snoozed ring, apart from the entries of the stored alarms and
+ * from the watchdog, that asks for [RingController.endSnooze].
+ */
+internal interface SnoozeAlarms {
+    /** Sets or moves the entry of [ring]'s alarm so it fires at [at]. False when it could not be set. */
+    fun setSnooze(ring: ScheduledRing, at: Instant): Boolean
+
+    fun cancelSnooze(alarmId: Long)
 }
 
 /** Starts [RingingService]. A seam so the controller can be tested without Android. */

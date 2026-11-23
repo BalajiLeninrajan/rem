@@ -74,6 +74,8 @@ class AlarmEditorViewModelTest {
         editor.toggleDay(DayOfWeek.TUESDAY)
         editor.setMinRingVolumePercent(40)
         editor.setVolumeRampSeconds(0)
+        editor.setSnoozeMinutes(10)
+        editor.setSnoozeLimit(0)
         editor.setVibrate(false)
         editor.setRingtone("content://media/alarm/7")
         editor.save()
@@ -91,11 +93,32 @@ class AlarmEditorViewModelTest {
                 ringtoneUri = "content://media/alarm/7",
                 minRingVolumePercent = 40,
                 volumeRampSeconds = 0,
+                snoozeMinutes = 10,
+                snoozeLimit = 0,
             ),
             saved,
         )
         assertTrue(saved.id > Alarm.NEW_ID)
         assertTrue(editor.state.value.finished)
+    }
+
+    @Test
+    fun `snooze values are kept inside their ranges`() = runTest {
+        val editor = editor()
+        assertEquals(Alarm.DEFAULT_SNOOZE_MINUTES, editor.state.value.snoozeMinutes)
+        assertEquals(Alarm.DEFAULT_SNOOZE_LIMIT, editor.state.value.snoozeLimit)
+
+        editor.setSnoozeMinutes(0)
+        editor.setSnoozeLimit(11)
+        advanceUntilIdle()
+        assertEquals(Alarm.SNOOZE_MINUTES.first, editor.state.value.snoozeMinutes)
+        assertEquals(Alarm.SNOOZE_LIMIT.last, editor.state.value.snoozeLimit)
+
+        editor.setSnoozeMinutes(31)
+        editor.setSnoozeLimit(-1)
+        advanceUntilIdle()
+        assertEquals(Alarm.SNOOZE_MINUTES.last, editor.state.value.snoozeMinutes)
+        assertEquals(0, editor.state.value.snoozeLimit)
     }
 
     @Test
@@ -127,6 +150,8 @@ class AlarmEditorViewModelTest {
             enabled = false,
             minRingVolumePercent = 25,
             volumeRampSeconds = 120,
+            snoozeMinutes = 8,
+            snoozeLimit = 1,
         )
         val id = alarms.upsert(stored)
         val editor = editor(id)
@@ -138,6 +163,8 @@ class AlarmEditorViewModelTest {
         assertEquals(RepeatDays.WEEKDAYS, loaded.repeatDays)
         assertEquals(25, loaded.minRingVolumePercent)
         assertEquals(120, loaded.volumeRampSeconds)
+        assertEquals(8, loaded.snoozeMinutes)
+        assertEquals(1, loaded.snoozeLimit)
 
         editor.setLabel("New")
         editor.save()
@@ -350,6 +377,8 @@ class AlarmEditorViewModelTest {
             ringtoneUri = "content://media/alarm/7",
             minRingVolumePercent = 40,
             volumeRampSeconds = 90,
+            snoozeMinutes = 15,
+            snoozeLimit = 7,
         )
         val sourceId = alarms.upsertWithBarcodes(source, listOf(toothpaste, cereal))
         val storedBarcodes = barcodes.all(sourceId)
@@ -366,6 +395,8 @@ class AlarmEditorViewModelTest {
         assertEquals("content://media/alarm/7", copy.ringtoneUri)
         assertEquals(40, copy.minRingVolumePercent)
         assertEquals(90, copy.volumeRampSeconds)
+        assertEquals(15, copy.snoozeMinutes)
+        assertEquals(7, copy.snoozeLimit)
         assertFalse("a new alarm is switched on when saved", copy.staysOff)
         assertEquals("the barcodes wait unsaved", listOf(toothpaste, cereal), copy.barcodes)
         assertEquals(listOf(toothpaste, cereal), editor.currentBarcodes())
@@ -376,7 +407,14 @@ class AlarmEditorViewModelTest {
 
     @Test
     fun `saving a duplicate stores a second alarm with its own barcodes and leaves the source alone`() = runTest {
-        val source = Alarm(time = LocalTime.of(5, 45), label = "Gym", enabled = false, minRingVolumePercent = 40)
+        val source = Alarm(
+            time = LocalTime.of(5, 45),
+            label = "Gym",
+            enabled = false,
+            minRingVolumePercent = 40,
+            snoozeMinutes = 2,
+            snoozeLimit = 0,
+        )
         val sourceId = alarms.upsertWithBarcodes(source, listOf(toothpaste, cereal))
         val sourceBarcodes = barcodes.all(sourceId)
         val editor = editor(copyFromId = sourceId)

@@ -3,6 +3,7 @@ package dev.balaji.rem.ring
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.balaji.rem.ui.AppLinks
@@ -51,14 +52,94 @@ class RingNotificationsTest {
         assertEquals(RingingActivity::class.java.name, shadowOf(notification.contentIntent).savedIntent.component?.className)
     }
 
+    private fun spec(requiresBarcode: Boolean, snoozesLeft: Int) = RingSpec(
+        alarmId = 7,
+        label = "Work",
+        ringtoneUri = null,
+        vibrate = true,
+        minRingVolumePercent = 70,
+        volumeRampSeconds = 30,
+        headphonesOnly = false,
+        speakerFallbackSeconds = 30,
+        startedAt = Instant.parse("2026-01-15T06:45:00Z"),
+        requiresBarcode = requiresBarcode,
+        snoozeMinutes = 5,
+        snoozesLeft = snoozesLeft,
+    )
+
+    private fun Notification.Action.broadcast(): Intent {
+        val pending = shadowOf(actionIntent)
+        assertTrue(pending.isBroadcastIntent)
+        return pending.savedIntent
+    }
+
     @Test
-    fun `the only action opens the ringing screen and nothing dismisses or snoozes`() {
+    fun `until the alarm is loaded the only action opens the ringing screen`() {
         val notification = notifications.ringing(label = "", startedAt = null)
 
         val action = notification.actions.single()
         assertEquals("Scan to dismiss", action.title.toString())
         assertEquals(RingingActivity::class.java.name, shadowOf(action.actionIntent).savedIntent.component?.className)
         assertEquals("Alarm", notification.extras.getString(Notification.EXTRA_TITLE))
+    }
+
+    @Test
+    fun `an alarm with barcodes offers snooze and scan to dismiss`() {
+        val notification = notifications.ringing("Work", Instant.parse("2026-01-15T06:45:00Z"), spec(requiresBarcode = true, snoozesLeft = 2))
+
+        val (snooze, scan) = notification.actions.toList()
+        assertEquals(2, notification.actions.size)
+        assertEquals("Snooze 5 min", snooze.title.toString())
+        val intent = snooze.broadcast()
+        assertEquals(RingActionReceiver::class.java.name, intent.component?.className)
+        assertEquals(RingContract.ACTION_SNOOZE, intent.action)
+        assertEquals(7L, intent.getLongExtra(RingContract.EXTRA_ALARM_ID, 0))
+        assertEquals("Scan to dismiss", scan.title.toString())
+        assertEquals(RingingActivity::class.java.name, shadowOf(scan.actionIntent).savedIntent.component?.className)
+    }
+
+    @Test
+    fun `an alarm without barcodes offers snooze and a plain dismiss that opens nothing`() {
+        val notification = notifications.ringing("Work", Instant.parse("2026-01-15T06:45:00Z"), spec(requiresBarcode = false, snoozesLeft = 1))
+
+        assertEquals(listOf("Snooze 5 min", "Dismiss"), notification.actions.map { it.title.toString() })
+        val dismiss = notification.actions[1].broadcast()
+        assertEquals(RingActionReceiver::class.java.name, dismiss.component?.className)
+        assertEquals(RingContract.ACTION_DISMISS, dismiss.action)
+        assertEquals(7L, dismiss.getLongExtra(RingContract.EXTRA_ALARM_ID, 0))
+    }
+
+    @Test
+    fun `with no snoozes left only the way to dismiss is offered`() {
+        val started = Instant.parse("2026-01-15T06:45:00Z")
+
+        val withBarcodes = notifications.ringing("Work", started, spec(requiresBarcode = true, snoozesLeft = 0))
+        val without = notifications.ringing("Work", started, spec(requiresBarcode = false, snoozesLeft = 0))
+
+        assertEquals(listOf("Scan to dismiss"), withBarcodes.actions.map { it.title.toString() })
+        assertEquals(listOf("Dismiss"), without.actions.map { it.title.toString() })
+    }
+
+    @Test
+    fun `a snoozed alarm has an ongoing quiet notification per alarm that opens the ringing screen`() {
+        notifications.ensureChannels()
+        val snoozed = SnoozedAlarm(7, "Work", Instant.parse("2026-01-15T06:50:00Z"))
+
+        notifications.notifySnoozed(snoozed)
+        notifications.notifySnoozed(snoozed.copy(alarmId = 8, label = ""))
+
+        assertEquals(NotificationManager.IMPORTANCE_LOW, manager.getNotificationChannel(RingContract.CHANNEL_SNOOZED).importance)
+        val notification = shadowOf(manager).getNotification("7", RingContract.NOTIFICATION_ID_SNOOZED)
+        assertEquals(RingContract.CHANNEL_SNOOZED, notification.channelId)
+        assertEquals("Work", notification.extras.getString(Notification.EXTRA_TITLE))
+        assertTrue(notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString().startsWith("Snoozed until "))
+        assertTrue(notification.flags and Notification.FLAG_ONGOING_EVENT != 0)
+        assertEquals(RingingActivity::class.java.name, shadowOf(notification.contentIntent).savedIntent.component?.className)
+        assertEquals(2, shadowOf(manager).allNotifications.size)
+
+        notifications.cancelSnoozed(7)
+        assertNull(shadowOf(manager).getNotification("7", RingContract.NOTIFICATION_ID_SNOOZED))
+        assertEquals(1, shadowOf(manager).allNotifications.size)
     }
 
     @Test

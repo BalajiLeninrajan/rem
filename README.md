@@ -2,25 +2,26 @@
 
 1rem = 90min
 
-rem is an Android alarm clock. You tell it when you must be awake, it rings at the end of a sleep cycle shortly before that, and it stops only when you scan a barcode you registered on that alarm, such as the toothpaste in the bathroom.
+rem is an Android alarm clock. You tell it when you must be awake, it rings at the end of a sleep cycle shortly before that, and it stops only when you scan a barcode you registered on that alarm, such as the toothpaste in the bathroom. You can snooze it a few times first.
 
 It needs Android 12 or newer. It has no accounts, no analytics and no network permission.
 
 ## What it does
 
-- Each alarm has a "must wake by" time, repeat days, a label, a ringtone, a vibrate switch, a volume floor, a volume ramp and its own barcodes. One barcode can be registered on several alarms.
+- Each alarm has a "must wake by" time, repeat days, a label, a ringtone, a vibrate switch, a volume floor, a volume ramp, a snooze length and limit, and its own barcodes. One barcode can be registered on several alarms.
 - The play button next to the alarm sound plays it in the editor on the alarm stream, raised to the alarm's volume floor. That includes the bundled tone, which the system sound picker does not list.
 - Barcodes are added, test-scanned, renamed and deleted in the alarm's editor. A new alarm's barcodes are stored when you save it.
-- "Duplicate", in an alarm card's menu or the editor's top bar, opens a new alarm with the same time, label, days, sound and barcodes. Nothing is stored until you save the copy.
+- "Duplicate", in an alarm card's menu or the editor's top bar, opens a new alarm with the same time, label, days, sound, snooze and barcodes. Nothing is stored until you save the copy.
 - Press "going to sleep" and every alarm due in the next 16 hours moves to the end of a 90 minute cycle, if one ends within 30 minutes before its deadline. Otherwise it rings at the deadline. The home screen shows the ring time and the reason, for example "Rings 06:45, 5 cycles, 15 min before 07:00".
 - When no cycle ends in time but one ends at most 30 minutes after the deadline, you can choose to ring then instead, per alarm and only for that night, for example "Rings 06:15, 4 cycles, 15 min after 06:00". "Going to sleep" asks about each such alarm, and the answer defaults to the alarm time. While the session runs, the alarm's card can switch either way until the alarm time. The yes is for that alarm time: changing the alarm's time or switching it off takes it back. Nothing ever rings more than 30 minutes late, and only after you said yes.
-- A ringing alarm stops when you scan one of its barcodes. There is no snooze. The big button says "scan to dismiss" and opens the scanner.
+- A ringing alarm stops when you scan one of its barcodes. The big button says "scan to dismiss" and opens the scanner.
+- Snooze is a plain tap, on the ringing screen or the notification, and needs no barcode. Each alarm sets how long a snooze lasts (5 minutes by default) and how many one ring allows (3 by default, 0 turns snooze off). Once they are used up only dismiss is left. A "snoozed until" notification opens a screen where you can dismiss the alarm early, with the barcode if it has one. A snooze does not end the sleep session, survives a reboot, and if it comes due while another alarm rings it rings right after that one.
 - While the scanner or the typed code screen is open the alarm goes quiet for 60 seconds, and the screen shows the time left. It rings again when that runs out or when you go back. Opening the scanner again gives another 60 seconds. The 30 minute limit still counts.
 - If the barcode is lost or the camera is broken, you can type a 40 character code shown on screen. Pasting is off.
-- An alarm with no barcode stops with a plain button, and its card on the home screen says so.
+- An alarm with no barcode stops with a plain Dismiss button, on the ringing screen and on the notification, and its card on the home screen says so.
 - With the headphones-only setting on, alarms play on connected headphones and keep the speaker silent. A ring moves to the speaker when the headphones disconnect or after 2 minutes without dismissal.
 - The alarm volume ramps up, is held above the alarm's floor while ringing and is restored afterwards.
-- Ringing stops after 30 minutes. That, an alarm the phone slept through, and a ring cut off by a reboot each give a "missed alarm" notification.
+- Ringing stops after 30 minutes, counted again from each ring after a snooze. That, an alarm the phone slept through, and a ring cut off by a reboot each give a "missed alarm" notification.
 - Alarms survive reboots, including before the first unlock, app updates, and clock and timezone changes.
 - A reliability screen checks notifications, full-screen alarms, exact alarms, Do Not Disturb, background restriction, the camera permission and whether every alarm that is on has a barcode. It has a fix button for each and a "test alarm in 1 minute" button.
 - Cycle length, time to fall asleep, the early window, headphones only and the speaker fallback time are settings for all alarms.
