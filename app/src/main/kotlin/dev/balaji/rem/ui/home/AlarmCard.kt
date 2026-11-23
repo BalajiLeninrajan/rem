@@ -3,11 +3,15 @@ package dev.balaji.rem.ui.home
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -45,7 +49,10 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 
-/** One alarm: the deadline large, label and repeat days, the computed ring time, the switch and a delete menu. */
+/**
+ * One alarm: the deadline large, label and repeat days, the computed ring time, a warning
+ * when it is on without a barcode, the switch and a delete menu.
+ */
 @Composable
 fun AlarmCard(
     row: AlarmRow,
@@ -83,6 +90,22 @@ fun AlarmCard(
                     color = if (alarm.enabled) colors.primary else colors.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+                if (alarm.enabled && row.noBarcode) {
+                    Row(modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = colors.error,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.ui_home_alarm_no_barcode),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.error,
+                        )
+                    }
+                }
             }
             Column(horizontalAlignment = Alignment.End) {
                 AlarmMenu(onDelete = onDelete)

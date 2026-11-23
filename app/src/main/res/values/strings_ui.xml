@@ -9,7 +9,6 @@
     <string name="ui_action_cancel">Cancel</string>
     <string name="ui_action_ok">OK</string>
     <string name="ui_action_save">Save</string>
-    <string name="ui_action_continue">Continue</string>
     <string name="ui_action_open_settings">Open settings</string>
     <string name="ui_action_rename">Rename</string>
     <string name="ui_action_done">Done</string>
@@ -56,6 +55,7 @@
     <string name="ui_home_ringing_now">Ringing now</string>
     <string name="ui_home_alarm_off">Off</string>
     <string name="ui_home_scheduling">Working out the ring time</string>
+    <string name="ui_home_alarm_no_barcode">No barcode. A plain button stops it.</string>
     <string name="ui_home_alarm_deleted">Alarm deleted</string>
     <string name="ui_home_empty_title">No alarms yet</string>
     <string name="ui_home_empty_body">Add the time you must be up by. rem picks the ring time from your sleep cycles.</string>
@@ -70,8 +70,6 @@
     <string name="ui_home_end_sleep">I\'m up</string>
     <string name="ui_home_warning_ringing">An alarm is ringing. It stops only from the ringing screen.</string>
     <string name="ui_home_warning_ringing_action">Open the ringing screen</string>
-    <string name="ui_home_warning_no_barcode">No barcode is registered. Until you add one, a ringing alarm stops with a plain button.</string>
-    <string name="ui_home_warning_no_barcode_action">Add a barcode</string>
     <plurals name="ui_home_warning_reliability">
         <item quantity="one">%d reliability check is failing. An alarm may not ring or may not show.</item>
         <item quantity="other">%d reliability checks are failing. An alarm may not ring or may not show.</item>
@@ -93,32 +91,35 @@
     <string name="ui_editor_repeat_once_hint">No day selected. The alarm rings once and then turns off.</string>
     <string name="ui_editor_label">Label</string>
     <string name="ui_editor_label_too_long">Keep the label to %d characters or fewer</string>
-    <string name="ui_editor_headphones_only">Headphones only</string>
-    <!-- %s is a duration such as 120 s. -->
-    <string name="ui_editor_headphones_only_description">Stays off the phone speaker while headphones are connected. Moves to the speaker after %s without dismissal.</string>
     <string name="ui_editor_vibrate">Vibrate</string>
     <string name="ui_editor_ringtone">Alarm sound</string>
     <string name="ui_editor_ringtone_default">rem default tone</string>
     <string name="ui_editor_ringtone_custom">Custom sound</string>
     <string name="ui_editor_ringtone_reset">Use the rem default tone</string>
     <string name="ui_editor_ringtone_picker_missing">This phone has no sound picker</string>
+    <string name="ui_editor_min_volume">Minimum ring volume</string>
+    <string name="ui_editor_min_volume_description">The alarm volume is raised to this level and held there while it rings.</string>
+    <string name="ui_editor_ramp">Volume ramp</string>
+    <string name="ui_editor_ramp_description">How long the sound takes to reach full volume.</string>
+    <string name="ui_editor_ramp_off">Off</string>
+    <string name="ui_editor_barcodes">Barcodes</string>
     <string name="ui_editor_delete_title">Delete this alarm?</string>
 
     <!-- Barcodes -->
     <string name="ui_barcodes_add">Add barcode</string>
     <string name="ui_barcodes_test_scan">Test scan</string>
-    <string name="ui_barcodes_intro">Scanning any one of these stops a ringing alarm. Pick things that stay far from your bed.</string>
-    <string name="ui_barcodes_empty">No barcodes yet. Add one from something that stays far from your bed, like the toothpaste in the bathroom. Scanning it will be the only way to stop an alarm.</string>
+    <string name="ui_barcodes_intro">Scanning any one of these stops this alarm. Pick things that stay far from your bed.</string>
+    <string name="ui_barcodes_empty">No barcode yet, so a plain button stops this alarm. Add one from something that stays far from your bed, like the toothpaste in the bathroom. Then scanning it is the only way to stop the alarm.</string>
     <string name="ui_barcodes_label">Name</string>
     <string name="ui_barcodes_rename_title">Rename barcode</string>
     <!-- %s is the barcode name. -->
     <string name="ui_barcodes_delete_title">Delete %s?</string>
-    <string name="ui_barcodes_delete_body">Scanning it will no longer stop an alarm.</string>
-    <string name="ui_barcodes_delete_last">This is your only barcode. Without one, a ringing alarm stops with a plain button.</string>
+    <!-- For screen readers. %s is the barcode name. -->
+    <string name="ui_barcodes_delete_description">Delete %s</string>
+    <string name="ui_barcodes_delete_body">Scanning it will no longer stop this alarm.</string>
+    <string name="ui_barcodes_delete_last">This is the alarm\'s only barcode. Without one, a plain button stops it.</string>
     <string name="ui_barcodes_camera_rationale_title">Camera access</string>
     <string name="ui_barcodes_camera_rationale">rem uses the camera to read barcodes, here and when an alarm rings. Images are read on the phone and are not stored or sent anywhere.</string>
-    <string name="ui_barcodes_camera_denied_title">Camera access is off</string>
-    <string name="ui_barcodes_camera_denied">Without the camera rem cannot read barcodes. You can allow it in the app settings.</string>
     <!-- %1$s is the format name such as EAN-13, %2$s the value. -->
     <string name="ui_barcode_format_and_value">%1$s, %2$s</string>
     <string name="ui_barcode_format_ean_13">EAN-13</string>
@@ -144,13 +145,12 @@
     <string name="ui_scan_again">Scan again</string>
     <string name="ui_scan_another">Scan another</string>
     <!-- %s is the barcode name. -->
-    <string name="ui_scan_duplicate_title">Already registered as %s</string>
+    <string name="ui_scan_duplicate_title">This alarm already has it as %s</string>
     <string name="ui_scan_test_match">Matches %s</string>
-    <string name="ui_scan_test_no_match">Not a registered barcode</string>
+    <string name="ui_scan_test_no_match">Not one of this alarm\'s barcodes</string>
 
     <!-- Settings -->
     <string name="ui_settings_reset">Reset</string>
-    <string name="ui_settings_off">Off</string>
     <string name="ui_settings_section_sleep">Sleep cycles</string>
     <string name="ui_settings_section_ringing">Ringing</string>
     <string name="ui_settings_cycle">Cycle length</string>
@@ -160,10 +160,8 @@
     <string name="ui_settings_fall_asleep_description">Added after you press going to sleep, before the first cycle starts.</string>
     <string name="ui_settings_early_window">Early window</string>
     <string name="ui_settings_early_window_description">The most an alarm may ring before its must-wake-by time to catch the end of a cycle.</string>
-    <string name="ui_settings_min_volume">Minimum ring volume</string>
-    <string name="ui_settings_min_volume_description">The alarm volume is raised to this level and held there while it rings.</string>
-    <string name="ui_settings_ramp">Volume ramp</string>
-    <string name="ui_settings_ramp_description">How long the sound takes to reach full volume.</string>
+    <string name="ui_settings_headphones_only">Headphones only</string>
+    <string name="ui_settings_headphones_only_description">While headphones are connected, alarms stay off the phone speaker until the speaker fallback time runs out.</string>
     <string name="ui_settings_speaker_fallback">Speaker fallback</string>
     <string name="ui_settings_speaker_fallback_description">How long a headphones-only alarm rings before it moves to the phone speaker.</string>
 
@@ -197,9 +195,10 @@
     <string name="ui_check_camera">Camera</string>
     <string name="ui_check_camera_ok">Allowed. Barcodes can be scanned.</string>
     <string name="ui_check_camera_problem">Not allowed. You would have to type the 40 character code to stop an alarm.</string>
-    <string name="ui_check_barcode">Barcode</string>
-    <string name="ui_check_barcode_ok">At least one barcode is registered.</string>
-    <string name="ui_check_barcode_problem">None registered. A ringing alarm stops with a plain button.</string>
+    <string name="ui_check_barcode">Barcodes</string>
+    <string name="ui_check_barcode_ok">Every alarm that is on has a barcode.</string>
+    <string name="ui_check_barcode_problem">An alarm that is on has no barcode. A plain button stops it.</string>
+    <string name="ui_check_barcode_fix">Add a barcode</string>
     <string name="ui_test_alarm_title">Test it</string>
     <string name="ui_test_alarm_body">Sets a real alarm one minute from now. Press the button, then lock the phone and wait.</string>
     <!-- %s is a clock time. -->
@@ -222,6 +221,7 @@
     <string name="ui_onboarding_notifications_body">Android opens the ringing screen through a notification. If notifications are off, an alarm sounds but nothing shows on the lock screen. rem sends no other notifications, except to tell you an alarm was missed.</string>
     <string name="ui_onboarding_notifications_allow">Allow notifications</string>
     <string name="ui_onboarding_barcode_title">Pick a barcode to get up for</string>
-    <string name="ui_onboarding_barcode_body">A ringing alarm stops only when you scan a barcode you registered. Choose something away from your bed, like the toothpaste in the bathroom. There is no snooze.</string>
+    <string name="ui_onboarding_barcode_body">Each alarm stops only when you scan one of its barcodes. Choose something away from your bed, like the toothpaste in the bathroom, and add it to the alarm. There is no snooze.</string>
+    <string name="ui_onboarding_add_alarm">Add an alarm</string>
     <string name="ui_onboarding_skip">Not now</string>
 </resources>

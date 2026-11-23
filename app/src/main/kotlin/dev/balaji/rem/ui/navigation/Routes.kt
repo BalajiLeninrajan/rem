@@ -11,11 +11,11 @@ data object HomeRoute
 @Serializable
 data class AlarmEditorRoute(val alarmId: Long = Alarm.NEW_ID)
 
-/** List of registered barcodes with rename and delete. */
-@Serializable
-data object BarcodesRoute
-
-/** @property testOnly true checks a scan against the registered barcodes, false registers what is scanned. */
+/**
+ * The scanner for the alarm in the [AlarmEditorRoute] right below it. Opened only from the editor.
+ *
+ * @property testOnly true checks a scan against the alarm's barcodes, false adds what is scanned to the alarm.
+ */
 @Serializable
 data class BarcodeScanRoute(val testOnly: Boolean = false)
 

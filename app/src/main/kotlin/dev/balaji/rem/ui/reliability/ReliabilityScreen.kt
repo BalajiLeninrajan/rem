@@ -55,14 +55,19 @@ import kotlin.time.Duration.Companion.seconds
 
 private val RefreshPeriod = 3.seconds
 
-/** The reliability checks with a fix button each, and the test alarm button. */
+/**
+ * The reliability checks with a fix button each, and the test alarm button. [onEditAlarm]
+ * opens the editor of an alarm that has no barcode.
+ */
 @Composable
 fun ReliabilityScreen(
-    onOpenBarcodes: () -> Unit,
+    onEditAlarm: (alarmId: Long) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel = containerViewModel { ReliabilityViewModel(it.barcodeRepository, it.alarmScheduler, it.clock) }
+    val viewModel = containerViewModel {
+        ReliabilityViewModel(it.alarmRepository, it.barcodeRepository, it.alarmScheduler, it.clock)
+    }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -101,7 +106,7 @@ fun ReliabilityScreen(
                 CheckId.DO_NOT_DISTURB -> SystemSettings.openDoNotDisturb(context)
                 CheckId.BACKGROUND -> SystemSettings.openAppDetails(context)
                 CheckId.CAMERA -> cameraRequest.launch(Manifest.permission.CAMERA)
-                CheckId.BARCODE -> onOpenBarcodes()
+                CheckId.BARCODE -> state.alarmWithoutBarcode?.let(onEditAlarm)
             }
         },
         onTestAlarm = viewModel::scheduleTestAlarm,
@@ -299,7 +304,7 @@ private fun CheckId.text(): CheckText = when (this) {
         title = R.string.ui_check_barcode,
         ok = R.string.ui_check_barcode_ok,
         problem = R.string.ui_check_barcode_problem,
-        fix = R.string.ui_home_warning_no_barcode_action,
+        fix = R.string.ui_check_barcode_fix,
     )
 }
 
@@ -309,7 +314,10 @@ private fun ReliabilityPreview() {
     RemTheme {
         ReliabilityContent(
             state = ReliabilityUiState(
-                checks = reliabilityChecks(SystemChecks(fullScreenIntentAllowed = false), barcodeCount = 0),
+                checks = reliabilityChecks(
+                    SystemChecks(fullScreenIntentAllowed = false),
+                    BarcodeCoverage(withoutBarcode = listOf(1L)),
+                ),
                 testAlarmAt = Instant.parse("2026-01-14T23:01:00Z"),
             ),
             manufacturer = "samsung",

@@ -44,16 +44,16 @@ private val OnboardingMaxWidth = 480.dp
 
 /**
  * First run: explains why notifications are needed and requests the permission, then
- * points to registering a barcode.
+ * explains barcodes and points to adding the first alarm, where they are added.
  *
  * @param onDone closes onboarding and returns to home.
- * @param onAddBarcode closes onboarding and opens the barcodes screen.
+ * @param onAddAlarm closes onboarding and opens the editor for a new alarm.
  */
 @Composable
 fun OnboardingScreen(
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
-    onAddBarcode: () -> Unit = onDone,
+    onAddAlarm: () -> Unit = onDone,
 ) {
     val viewModel = containerViewModel { OnboardingViewModel(it.settingsRepository) }
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -67,7 +67,7 @@ fun OnboardingScreen(
     LaunchedEffect(state.exit) {
         when (state.exit) {
             OnboardingExit.HOME -> onDone()
-            OnboardingExit.ADD_BARCODE -> onAddBarcode()
+            OnboardingExit.ADD_ALARM -> onAddAlarm()
             null -> Unit
         }
     }
@@ -82,7 +82,7 @@ fun OnboardingScreen(
                 viewModel.onNotificationsAnswered()
             }
         },
-        onAddBarcode = { viewModel.finish(OnboardingExit.ADD_BARCODE) },
+        onAddAlarm = { viewModel.finish(OnboardingExit.ADD_ALARM) },
         onSkip = { viewModel.finish(OnboardingExit.HOME) },
         modifier = modifier,
     )
@@ -92,7 +92,7 @@ fun OnboardingScreen(
 fun OnboardingContent(
     step: OnboardingStep,
     onAllowNotifications: () -> Unit,
-    onAddBarcode: () -> Unit,
+    onAddAlarm: () -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -110,8 +110,8 @@ fun OnboardingContent(
                 icon = Icons.Filled.QrCodeScanner,
                 title = stringResource(R.string.ui_onboarding_barcode_title),
                 body = stringResource(R.string.ui_onboarding_barcode_body),
-                primaryLabel = stringResource(R.string.ui_home_warning_no_barcode_action),
-                onPrimary = onAddBarcode,
+                primaryLabel = stringResource(R.string.ui_onboarding_add_alarm),
+                onPrimary = onAddAlarm,
                 onSkip = onSkip,
             )
         }
@@ -177,7 +177,7 @@ private fun OnboardingPageBody(
 @Composable
 private fun OnboardingNotificationsPreview() {
     RemTheme {
-        OnboardingContent(OnboardingStep.NOTIFICATIONS, onAllowNotifications = {}, onAddBarcode = {}, onSkip = {})
+        OnboardingContent(OnboardingStep.NOTIFICATIONS, onAllowNotifications = {}, onAddAlarm = {}, onSkip = {})
     }
 }
 
@@ -185,6 +185,6 @@ private fun OnboardingNotificationsPreview() {
 @Composable
 private fun OnboardingBarcodePreview() {
     RemTheme {
-        OnboardingContent(OnboardingStep.BARCODE, onAllowNotifications = {}, onAddBarcode = {}, onSkip = {})
+        OnboardingContent(OnboardingStep.BARCODE, onAllowNotifications = {}, onAddAlarm = {}, onSkip = {})
     }
 }

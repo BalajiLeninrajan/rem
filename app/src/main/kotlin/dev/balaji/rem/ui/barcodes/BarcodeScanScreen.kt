@@ -46,11 +46,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.balaji.rem.R
 import dev.balaji.rem.core.Barcode
 import dev.balaji.rem.core.BarcodeFormat
 import dev.balaji.rem.core.BarcodeKey
-import dev.balaji.rem.di.containerViewModel
 import dev.balaji.rem.scan.BarcodeScanner
 import dev.balaji.rem.scan.ScannedBarcode
 import dev.balaji.rem.ui.components.ScreenScaffold
@@ -62,15 +62,21 @@ import kotlin.time.Duration.Companion.seconds
 
 private val PermissionRecheckPeriod = 2.seconds
 
-/** Scans one barcode. Registers it, or with [testOnly] only says whether it is registered. */
+const val MAX_BARCODE_LABEL_LENGTH = 40
+
+/**
+ * Scans one barcode for the alarm behind [target]. Adds it to the alarm, or with [testOnly]
+ * only says whether the alarm has it.
+ */
 @Composable
 fun BarcodeScanScreen(
     testOnly: Boolean,
+    target: BarcodeTarget,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel = containerViewModel { BarcodeScanViewModel(testOnly, it.alarmRepository, it.barcodeRepository) }
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    val scan = viewModel { BarcodeScanViewModel(testOnly, target) }
+    val state by scan.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.stage) {
         if (state.stage == ScanStage.Saved) onDone()
@@ -78,11 +84,11 @@ fun BarcodeScanScreen(
 
     BarcodeScanContent(
         state = state,
-        onScanned = { viewModel.onScanned(it.toScannedCode()) },
-        onCameraError = viewModel::onCameraError,
-        onLabelChange = viewModel::setLabel,
-        onSave = viewModel::save,
-        onScanAgain = viewModel::scanAgain,
+        onScanned = { scan.onScanned(it.toScannedCode()) },
+        onCameraError = scan::onCameraError,
+        onLabelChange = scan::setLabel,
+        onSave = scan::save,
+        onScanAgain = scan::scanAgain,
         onDone = onDone,
         modifier = modifier,
     )

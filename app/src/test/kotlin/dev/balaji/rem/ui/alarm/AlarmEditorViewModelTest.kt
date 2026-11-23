@@ -1,12 +1,18 @@
 package dev.balaji.rem.ui.alarm
 
 import dev.balaji.rem.core.Alarm
+import dev.balaji.rem.core.Barcode
+import dev.balaji.rem.core.BarcodeFormat
 import dev.balaji.rem.core.DeadlineReason
 import dev.balaji.rem.core.RepeatDays
+import dev.balaji.rem.core.ScannedCode
 import dev.balaji.rem.core.WakeExplanation
 import dev.balaji.rem.data.fake.InMemoryAlarmRepository
+import dev.balaji.rem.data.fake.InMemoryBarcodeRepository
 import dev.balaji.rem.data.fake.InMemorySettingsRepository
 import dev.balaji.rem.data.fake.InMemorySleepSessionRepository
+import dev.balaji.rem.ui.barcodes.BarcodeScanViewModel
+import dev.balaji.rem.ui.barcodes.ScanStage
 import dev.balaji.rem.ui.testing.MainDispatcherRule
 import dev.balaji.rem.ui.testing.MutableClock
 import dev.balaji.rem.ui.testing.keepCollecting
@@ -16,6 +22,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -36,14 +43,18 @@ class AlarmEditorViewModelTest {
     // A Wednesday.
     private val clock = MutableClock(at("2026-01-14T23:00"), zone)
 
-    private val alarms = InMemoryAlarmRepository()
+    private val barcodes = InMemoryBarcodeRepository()
+    private val alarms = InMemoryAlarmRepository(barcodes = barcodes)
     private val settings = InMemorySettingsRepository()
     private val sessions = InMemorySleepSessionRepository()
+
+    private val toothpaste = Barcode(label = "Toothpaste", format = BarcodeFormat.EAN_13, value = "4006381333931")
+    private val cereal = Barcode(label = "Cereal", format = BarcodeFormat.EAN_13, value = "0036000291452")
 
     private fun at(local: String): Instant = LocalDateTime.parse(local).atZone(zone).toInstant()
 
     private fun TestScope.editor(alarmId: Long = Alarm.NEW_ID): AlarmEditorViewModel =
-        AlarmEditorViewModel(alarmId, alarms, settings, sessions, clock).also {
+        AlarmEditorViewModel(alarmId, alarms, barcodes, settings, sessions, clock).also {
             keepCollecting(it.state)
             advanceUntilIdle()
         }
@@ -230,5 +241,101 @@ class AlarmEditorViewModelTest {
         val next = editor.state.value.preview!!
         assertEquals(at("2026-01-16T07:00"), next.ringAt)
         assertEquals(WakeExplanation.AtDeadline(DeadlineReason.OUTSIDE_SESSION), next.explanation)
+    }
+
+    @Test
+    fun `a new alarm keeps its barcodes until it is saved and then stores them with it`() = runTest {
+        val editor = editor()
+
+        editor.addBarcode(toothpaste)
+        editor.addBarcode(cereal)
+        // The scanner checks first, but a second add of the same key must not make a second row.
+        editor.addBarcode(toothpaste.copy(label = "Again"))
+        advanceUntilIdle()
+        assertEquals(listOf(toothpaste, cereal), editor.state.value.barcodes)
+        assertEquals(listOf(toothpaste, cereal), editor.currentBarcodes())
+        assertTrue("nothing is stored before save", alarms.all().isEmpty())
+
+        editor.removeBarcode(cereal)
+        advanceUntilIdle()
+        assertEquals(listOf(toothpaste), editor.state.value.barcodes)
+
+        editor.save()
+        advanceUntilIdle()
+
+        val id = alarms.all().single().id
+        assertEquals(listOf("Toothpaste"), barcodes.all(id).map { it.label })
+    }
+
+    @Test
+    fun `leaving a new alarm without saving stores none of its barcodes`() = runTest {
+        val editor = editor()
+        editor.addBarcode(toothpaste)
+        advanceUntilIdle()
+
+        assertTrue(alarms.all().isEmpty())
+        assertTrue(barcodes.barcodesByAlarm.first().isEmpty())
+    }
+
+    @Test
+    fun `a stored alarm shows its own barcodes and adds and deletes them at once`() = runTest {
+        val id = alarms.upsertWithBarcodes(Alarm(time = LocalTime.of(8, 15)), listOf(toothpaste))
+        val other = alarms.upsertWithBarcodes(Alarm(time = LocalTime.of(9, 0)), listOf(toothpaste, cereal))
+        val editor = editor(id)
+        assertEquals(listOf("Toothpaste"), editor.state.value.barcodes.map { it.label })
+
+        editor.addBarcode(cereal)
+        advanceUntilIdle()
+        assertEquals(listOf("Toothpaste", "Cereal"), barcodes.all(id).map { it.label })
+        assertEquals(barcodes.all(id), editor.state.value.barcodes)
+
+        editor.removeBarcode(editor.state.value.barcodes.first())
+        advanceUntilIdle()
+        assertEquals(listOf("Cereal"), barcodes.all(id).map { it.label })
+        assertEquals(listOf("Cereal"), editor.state.value.barcodes.map { it.label })
+
+        assertEquals("the other alarm keeps its own", listOf("Toothpaste", "Cereal"), barcodes.all(other).map { it.label })
+    }
+
+    @Test
+    fun `renaming trims the name, ignores a blank one and works before and after the alarm is stored`() = runTest {
+        val editor = editor()
+        editor.addBarcode(toothpaste)
+        editor.renameBarcode(toothpaste, "  Paste ")
+        editor.renameBarcode(toothpaste, "   ")
+        advanceUntilIdle()
+        assertEquals(listOf("Paste"), editor.state.value.barcodes.map { it.label })
+
+        val id = alarms.upsertWithBarcodes(Alarm(time = LocalTime.of(8, 15)), listOf(cereal))
+        val stored = editor(id)
+        stored.renameBarcode(stored.state.value.barcodes.single(), "Oats")
+        advanceUntilIdle()
+        assertEquals(listOf("Oats"), barcodes.all(id).map { it.label })
+    }
+
+    @Test
+    fun `the scanner adds to the alarm in the editor and rejects what it already has`() = runTest {
+        val editor = editor()
+        editor.addBarcode(toothpaste)
+        advanceUntilIdle()
+
+        val duplicate = BarcodeScanViewModel(testOnly = false, editor)
+        duplicate.onScanned(ScannedCode(BarcodeFormat.EAN_13, toothpaste.value))
+        advanceUntilIdle()
+        assertEquals(ScanStage.Duplicate(toothpaste), duplicate.state.value.stage)
+
+        val scan = BarcodeScanViewModel(testOnly = false, editor)
+        scan.onScanned(ScannedCode(BarcodeFormat.UPC_A, "036000291452"))
+        advanceUntilIdle()
+        scan.setLabel("Cereal")
+        scan.save()
+        advanceUntilIdle()
+        assertEquals(ScanStage.Saved, scan.state.value.stage)
+        assertEquals(listOf(toothpaste, cereal), editor.state.value.barcodes)
+
+        val test = BarcodeScanViewModel(testOnly = true, editor)
+        test.onScanned(ScannedCode(BarcodeFormat.EAN_13, cereal.value))
+        advanceUntilIdle()
+        assertEquals(cereal, (test.state.value.stage as ScanStage.Tested).match)
     }
 }

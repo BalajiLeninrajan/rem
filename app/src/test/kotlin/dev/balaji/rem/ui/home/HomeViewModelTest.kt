@@ -72,7 +72,6 @@ class HomeViewModelTest {
         assertFalse(state.loading)
         assertTrue(state.alarms.isEmpty())
         assertEquals(SleepState.Hidden, state.sleep)
-        assertTrue(state.noBarcodes)
         assertEquals(0, state.reliabilityProblems)
         assertFalse(state.onboardingNeeded)
         assertEquals(zone, state.zone)
@@ -238,19 +237,38 @@ class HomeViewModelTest {
 
         viewModel.refresh(SystemChecks(notificationsEnabled = false, cameraGranted = false))
         advanceUntilIdle()
-        // The camera does not count while there is no barcode to scan.
+        // The camera does not count while no alarm has a barcode to scan.
         assertEquals(1, viewModel.state.value.reliabilityProblems)
-        assertTrue(viewModel.state.value.noBarcodes)
 
         val id = alarms.upsert(Alarm(time = LocalTime.of(7, 0)))
+        advanceUntilIdle()
+        assertEquals(1, viewModel.state.value.reliabilityProblems)
+        assertTrue(viewModel.state.value.alarms.single().noBarcode)
+
         barcodes.add(id, Barcode(label = "Toothpaste", format = BarcodeFormat.EAN_13, value = "4006381333931"))
         advanceUntilIdle()
         assertEquals(2, viewModel.state.value.reliabilityProblems)
-        assertFalse(viewModel.state.value.noBarcodes)
+        assertFalse(viewModel.state.value.alarms.single().noBarcode)
 
         viewModel.refresh(SystemChecks())
         advanceUntilIdle()
         assertEquals(0, viewModel.state.value.reliabilityProblems)
+    }
+
+    @Test
+    fun `each card knows whether its own alarm has a barcode`() = runTest {
+        val viewModel = viewModel()
+        val withBarcode = alarms.upsertWithBarcodes(
+            Alarm(time = LocalTime.of(7, 0)),
+            listOf(Barcode(label = "Toothpaste", format = BarcodeFormat.EAN_13, value = "4006381333931")),
+        )
+        val withoutBarcode = alarms.upsert(Alarm(time = LocalTime.of(8, 0)))
+        advanceUntilIdle()
+
+        assertEquals(
+            mapOf(withBarcode to false, withoutBarcode to true),
+            viewModel.state.value.alarms.associate { it.alarm.id to it.noBarcode },
+        )
     }
 
     @Test

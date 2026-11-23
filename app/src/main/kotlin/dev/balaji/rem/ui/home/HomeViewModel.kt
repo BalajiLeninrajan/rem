@@ -16,6 +16,7 @@ import dev.balaji.rem.data.SleepSessionRepository
 import dev.balaji.rem.ring.RingController
 import dev.balaji.rem.ring.RingingState
 import dev.balaji.rem.schedule.AlarmScheduler
+import dev.balaji.rem.ui.reliability.barcodeCoverage
 import dev.balaji.rem.ui.reliability.reliabilityProblemCount
 import dev.balaji.rem.ui.system.SystemChecks
 import java.time.Clock
@@ -55,7 +56,7 @@ class HomeViewModel(
         sessions.session,
         settings.onboardingDone,
     ) { storedAlarms, storedBarcodes, storedSettings, session, onboardingDone ->
-        Stored(storedAlarms, storedBarcodes.values.sumOf { it.size }, storedSettings, session, onboardingDone)
+        Stored(storedAlarms, storedBarcodes, storedSettings, session, onboardingDone)
     }
 
     private val live = combine(scheduler.plan, ringController.state, now, system) { plan, ringing, instant, checks ->
@@ -128,6 +129,7 @@ class HomeViewModel(
                     alarm = alarm,
                     nextRing = if (alarm.enabled) live.plan.forAlarm(alarm.id) else null,
                     ringing = alarm.id == live.ringingAlarmId,
+                    noBarcode = stored.barcodes[alarm.id].isNullOrEmpty(),
                 )
             },
             sleep = when {
@@ -136,8 +138,7 @@ class HomeViewModel(
                 else -> SleepState.Hidden
             },
             ringing = live.ringingAlarmId != null,
-            noBarcodes = stored.barcodeCount == 0,
-            reliabilityProblems = reliabilityProblemCount(live.system, stored.barcodeCount),
+            reliabilityProblems = reliabilityProblemCount(live.system, barcodeCoverage(stored.alarms, stored.barcodes)),
             onboardingNeeded = !stored.onboardingDone && !local.onboardingOpened,
             recentlyDeleted = local.recentlyDeleted,
             now = live.now,
@@ -147,7 +148,7 @@ class HomeViewModel(
 
     private data class Stored(
         val alarms: List<Alarm>,
-        val barcodeCount: Int,
+        val barcodes: Map<Long, List<Barcode>>,
         val settings: RemSettings,
         val session: SleepSession?,
         val onboardingDone: Boolean,

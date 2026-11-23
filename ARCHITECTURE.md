@@ -30,7 +30,7 @@ All the rules live here, as pure functions and small value types, with unit test
 
 ## Wiring
 
-There is no DI framework. `RemApplication` holds one `DefaultAppContainer`. Get it with `context.appContainer`, or `LocalAppContainer.current` in Compose. Build view models with `containerViewModel { MyViewModel(it.alarmRepository) }`.
+There is no DI framework. `RemApplication` holds one `DefaultAppContainer`. Get it with `context.appContainer`, or `LocalAppContainer.current` in Compose. Build view models with `containerViewModel { MyViewModel(it.alarmRepository) }`. `containerViewModel(owner) { ... }` scopes one to another back stack entry, which is how the scan screen reaches the editor below it.
 
 `DefaultAppContainer` never names a concrete class. It calls one module file per package:
 
@@ -48,6 +48,7 @@ The in-memory repositories (`data.fake`) and the stand-in controllers and schedu
 - The UI writes alarms, barcodes, settings and the sleep session through the repositories. It does not call `rescheduleAll`. The scheduler collects the alarm, session, settings and ringing-record flows and reschedules itself.
 - The UI reads ring times and explanations from `AlarmScheduler.plan`. For previews (an unsaved alarm, "if I sleep now") it calls `computeWakeTime` directly.
 - `schedule` writes `RingStateStore.markFired`, `retainFired` and `setScheduled`. It disables a one-shot alarm whose only occurrence was missed.
+- Barcodes are edited only in the alarm editor. `AlarmEditorViewModel` is the `BarcodeTarget` of the scan screen (`BarcodeScanRoute`, opened from the editor), which checks a scan against the alarm's barcodes and hands a new one back. For a stored alarm the editor writes added, renamed and deleted barcodes at once. A new alarm holds them in the view model until save.
 - `AlarmRepository.upsertWithBarcodes` saves an alarm and barcodes for it in one transaction, so a new alarm and its first barcodes are stored together. `upsert` updates a row in place and never replaces it, because a replace would delete the alarm's barcodes through the foreign key.
 - `ring` writes `RingStateStore.setRinging` and `clearRinging`, disables one-shot alarms when their ring ends, and ends the sleep session when a ring it covers is dismissed. It calls `removeFired` when a ring ends undismissed with its deadline still ahead.
 

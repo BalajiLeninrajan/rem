@@ -47,13 +47,19 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import dev.balaji.rem.R
+import dev.balaji.rem.core.Alarm
+import dev.balaji.rem.core.Barcode
+import dev.balaji.rem.core.BarcodeFormat
 import dev.balaji.rem.core.RepeatDays
 import dev.balaji.rem.core.WakeExplanation
 import dev.balaji.rem.di.containerViewModel
 import dev.balaji.rem.ui.components.ClockText
 import dev.balaji.rem.ui.components.ScreenScaffold
+import dev.balaji.rem.ui.components.SettingSlider
 import dev.balaji.rem.ui.components.WhileResumed
 import dev.balaji.rem.ui.format.currentLocale
 import dev.balaji.rem.ui.format.ringTimeText
@@ -70,16 +76,38 @@ import kotlinx.coroutines.launch
 
 private val RefreshPeriod = 15.seconds
 
-/** Creates an alarm when [alarmId] is `Alarm.NEW_ID`, edits the stored one otherwise. [onDone] closes the screen. */
+/**
+ * The editor's view model, held by [owner]. The scan screen passes the editor's back stack
+ * entry to reach the editor below it.
+ */
+@Composable
+fun alarmEditorViewModel(
+    alarmId: Long,
+    owner: ViewModelStoreOwner = checkNotNull(LocalViewModelStoreOwner.current) { "No ViewModelStoreOwner" },
+): AlarmEditorViewModel = containerViewModel(owner) {
+    AlarmEditorViewModel(
+        alarmId,
+        it.alarmRepository,
+        it.barcodeRepository,
+        it.settingsRepository,
+        it.sleepSessionRepository,
+        it.clock,
+    )
+}
+
+/**
+ * Creates an alarm when [alarmId] is `Alarm.NEW_ID`, edits the stored one otherwise.
+ * [onScanBarcode] opens the scanner for this alarm, to add a barcode or with `testOnly` to
+ * test one. [onDone] closes the screen.
+ */
 @Composable
 fun AlarmEditorScreen(
     alarmId: Long,
+    onScanBarcode: (testOnly: Boolean) -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel = containerViewModel {
-        AlarmEditorViewModel(alarmId, it.alarmRepository, it.settingsRepository, it.sleepSessionRepository, it.clock)
-    }
+    val viewModel = alarmEditorViewModel(alarmId)
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     WhileResumed(RefreshPeriod) { viewModel.refresh() }
@@ -97,6 +125,11 @@ fun AlarmEditorScreen(
         onToggleDay = viewModel::toggleDay,
         onVibrateChange = viewModel::setVibrate,
         onRingtoneChange = viewModel::setRingtone,
+        onMinRingVolumeChange = viewModel::setMinRingVolumePercent,
+        onVolumeRampChange = viewModel::setVolumeRampSeconds,
+        onScanBarcode = onScanBarcode,
+        onRenameBarcode = viewModel::renameBarcode,
+        onRemoveBarcode = viewModel::removeBarcode,
         modifier = modifier,
     )
 }
@@ -112,6 +145,11 @@ fun AlarmEditorContent(
     onToggleDay: (DayOfWeek) -> Unit,
     onVibrateChange: (Boolean) -> Unit,
     onRingtoneChange: (String?) -> Unit,
+    onMinRingVolumeChange: (Int) -> Unit,
+    onVolumeRampChange: (Int) -> Unit,
+    onScanBarcode: (testOnly: Boolean) -> Unit,
+    onRenameBarcode: (Barcode, String) -> Unit,
+    onRemoveBarcode: (Barcode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showTimePicker by rememberSaveable { mutableStateOf(false) }
@@ -171,6 +209,38 @@ fun AlarmEditorContent(
                 onRingtoneChange = onRingtoneChange,
                 onPickerMissing = { scope.launch { snackbarHostState.showSnackbar(pickerMissingMessage) } },
             )
+            SettingSlider(
+                title = stringResource(R.string.ui_editor_min_volume),
+                description = stringResource(R.string.ui_editor_min_volume_description),
+                value = state.minRingVolumePercent,
+                valueLabel = { stringResource(R.string.ui_unit_percent, it) },
+                range = Alarm.MIN_RING_VOLUME_PERCENT,
+                step = 5,
+                onCommit = onMinRingVolumeChange,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            SettingSlider(
+                title = stringResource(R.string.ui_editor_ramp),
+                description = stringResource(R.string.ui_editor_ramp_description),
+                value = state.volumeRampSeconds,
+                valueLabel = {
+                    if (it == 0) stringResource(R.string.ui_editor_ramp_off) else stringResource(R.string.ui_unit_seconds, it)
+                },
+                range = Alarm.VOLUME_RAMP_SECONDS,
+                step = 15,
+                onCommit = onVolumeRampChange,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            if (!state.loading) {
+                AlarmBarcodesSection(
+                    barcodes = state.barcodes,
+                    onAdd = { onScanBarcode(false) },
+                    onTest = { onScanBarcode(true) },
+                    onRename = onRenameBarcode,
+                    onRemove = onRemoveBarcode,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
         }
     }
 
@@ -307,6 +377,7 @@ private fun AlarmEditorPreview() {
                 isNew = false,
                 label = "Work",
                 repeatDays = RepeatDays.WEEKDAYS,
+                barcodes = listOf(Barcode(1, "Toothpaste", BarcodeFormat.EAN_13, "4006381333931")),
                 preview = RingPreview(
                     ringAt = Instant.parse("2026-01-15T06:45:00Z"),
                     deadline = Instant.parse("2026-01-15T07:00:00Z"),
@@ -323,6 +394,11 @@ private fun AlarmEditorPreview() {
             onToggleDay = {},
             onVibrateChange = {},
             onRingtoneChange = {},
+            onMinRingVolumeChange = {},
+            onVolumeRampChange = {},
+            onScanBarcode = {},
+            onRenameBarcode = { _, _ -> },
+            onRemoveBarcode = {},
         )
     }
 }

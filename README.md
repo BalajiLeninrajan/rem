@@ -9,15 +9,16 @@ It needs Android 12 or newer. It has no accounts, no analytics and no network pe
 ## What it does
 
 - Each alarm has a "must wake by" time, repeat days, a label, a ringtone, a vibrate switch, a volume floor, a volume ramp and its own barcodes. One barcode can be registered on several alarms.
+- Barcodes are added, test-scanned, renamed and deleted in the alarm's editor. A new alarm's barcodes are stored when you save it.
 - Press "going to sleep" and every alarm due in the next 16 hours moves to the end of a 90 minute cycle, if one ends within 30 minutes before its deadline. Otherwise it rings at the deadline. It never rings later. The home screen shows the ring time and the reason, for example "Rings 06:45, 5 cycles, 15 min before 07:00".
 - A ringing alarm stops when you scan one of its barcodes. There is no snooze. The big button says "five more minutes" and opens the scanner.
 - If the barcode is lost or the camera is broken, you can type a 40 character code shown on screen. Pasting is off.
-- An alarm with no barcode stops with a plain button, and the home screen warns you.
+- An alarm with no barcode stops with a plain button, and its card on the home screen says so.
 - With the headphones-only setting on, alarms play on connected headphones and keep the speaker silent. A ring moves to the speaker when the headphones disconnect or after 2 minutes without dismissal.
 - The alarm volume ramps up, is held above the alarm's floor while ringing and is restored afterwards.
 - Ringing stops after 30 minutes. That, an alarm the phone slept through, and a ring cut off by a reboot each give a "missed alarm" notification.
 - Alarms survive reboots, including before the first unlock, app updates, and clock and timezone changes.
-- A reliability screen checks notifications, full-screen alarms, exact alarms, Do Not Disturb, background restriction, the camera permission and whether a barcode is registered. It has a fix button for each and a "test alarm in 1 minute" button.
+- A reliability screen checks notifications, full-screen alarms, exact alarms, Do Not Disturb, background restriction, the camera permission and whether every alarm that is on has a barcode. It has a fix button for each and a "test alarm in 1 minute" button.
 - Cycle length, time to fall asleep, the early window, headphones only and the speaker fallback time are settings for all alarms.
 
 ## Get the APK

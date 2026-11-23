@@ -19,7 +19,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
-import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -75,7 +74,6 @@ private val RefreshPeriod = 15.seconds
 fun HomeScreen(
     onAddAlarm: () -> Unit,
     onEditAlarm: (alarmId: Long) -> Unit,
-    onOpenBarcodes: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenReliability: () -> Unit,
     onOpenOnboarding: () -> Unit,
@@ -128,7 +126,6 @@ fun HomeScreen(
         onDeleteAlarm = viewModel::delete,
         onGoToSleep = viewModel::goToSleep,
         onEndSleep = viewModel::endSleep,
-        onOpenBarcodes = onOpenBarcodes,
         onOpenSettings = onOpenSettings,
         onOpenReliability = onOpenReliability,
         onOpenRinging = { context.startActivity(RingContract.activityIntent(context)) },
@@ -146,7 +143,6 @@ fun HomeContent(
     onDeleteAlarm: (alarmId: Long) -> Unit,
     onGoToSleep: () -> Unit,
     onEndSleep: () -> Unit,
-    onOpenBarcodes: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenReliability: () -> Unit,
     onOpenRinging: () -> Unit,
@@ -158,9 +154,6 @@ fun HomeContent(
             TopAppBar(
                 title = { Text(stringResource(R.string.screen_home)) },
                 actions = {
-                    IconButton(onClick = onOpenBarcodes) {
-                        Icon(Icons.Filled.QrCodeScanner, contentDescription = stringResource(R.string.screen_barcodes))
-                    }
                     IconButton(onClick = onOpenReliability) {
                         Icon(Icons.Filled.Security, contentDescription = stringResource(R.string.screen_reliability))
                     }
@@ -180,7 +173,7 @@ fun HomeContent(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         val header: @Composable () -> Unit = {
-            HomeHeader(state, onGoToSleep, onEndSleep, onOpenBarcodes, onOpenReliability, onOpenRinging)
+            HomeHeader(state, onGoToSleep, onEndSleep, onOpenReliability, onOpenRinging)
         }
         BoxWithConstraints(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             if (state.loading) {
@@ -208,7 +201,7 @@ fun HomeContent(
 
 /** False when the header would draw nothing, so a wide window does not get an empty side pane. */
 private val HomeUiState.hasHeader: Boolean
-    get() = ringing || noBarcodes || reliabilityProblems > 0 || sleep != SleepState.Hidden
+    get() = ringing || reliabilityProblems > 0 || sleep != SleepState.Hidden
 
 /** Warnings first, then the sleep control. Shared by the single column and the side pane. */
 @Composable
@@ -216,7 +209,6 @@ private fun HomeHeader(
     state: HomeUiState,
     onGoToSleep: () -> Unit,
     onEndSleep: () -> Unit,
-    onOpenBarcodes: () -> Unit,
     onOpenReliability: () -> Unit,
     onOpenRinging: () -> Unit,
 ) {
@@ -226,13 +218,6 @@ private fun HomeHeader(
                 message = stringResource(R.string.ui_home_warning_ringing),
                 actionLabel = stringResource(R.string.ui_home_warning_ringing_action),
                 onAction = onOpenRinging,
-            )
-        }
-        if (state.noBarcodes) {
-            WarningBanner(
-                message = stringResource(R.string.ui_home_warning_no_barcode),
-                actionLabel = stringResource(R.string.ui_home_warning_no_barcode_action),
-                onAction = onOpenBarcodes,
             )
         }
         if (state.reliabilityProblems > 0) {
@@ -318,11 +303,14 @@ private fun previewState(): HomeUiState {
     return HomeUiState(
         loading = false,
         alarms = listOf(
-            AlarmRow(Alarm(id = 1, time = LocalTime.of(7, 0), label = "Work", repeatDays = RepeatDays.WEEKDAYS), ring),
+            AlarmRow(
+                Alarm(id = 1, time = LocalTime.of(7, 0), label = "Work", repeatDays = RepeatDays.WEEKDAYS),
+                ring,
+                noBarcode = true,
+            ),
             AlarmRow(Alarm(id = 2, time = LocalTime.of(9, 30), enabled = false), nextRing = null),
         ),
         sleep = SleepState.Active(startedAt = now, tonight = ring),
-        noBarcodes = true,
         reliabilityProblems = 1,
         now = now,
     )
@@ -340,7 +328,6 @@ private fun HomePreviewContent(state: HomeUiState) {
             onDeleteAlarm = {},
             onGoToSleep = {},
             onEndSleep = {},
-            onOpenBarcodes = {},
             onOpenSettings = {},
             onOpenReliability = {},
             onOpenRinging = {},

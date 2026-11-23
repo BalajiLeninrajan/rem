@@ -20,10 +20,10 @@
     <string name="ring_five_more_minutes">five more minutes</string>
     <string name="ring_cant_scan">can\'t scan?</string>
     <string name="ring_stop_alarm">Stop alarm</string>
-    <string name="ring_no_barcode_hint">No barcode is registered, so this button stops the alarm.</string>
+    <string name="ring_no_barcode_hint">This alarm has no barcode, so this button stops it.</string>
 
-    <string name="ring_scanner_instruction">Point the camera at one of your registered barcodes.</string>
-    <string name="ring_scanner_rejected">%1$s is not one of your barcodes. Scan a registered one.</string>
+    <string name="ring_scanner_instruction">Point the camera at one of this alarm\'s barcodes.</string>
+    <string name="ring_scanner_rejected">%1$s is not one of this alarm\'s barcodes.</string>
     <string name="ring_scanner_torch_on">Light on</string>
     <string name="ring_scanner_torch_off">Light off</string>
     <string name="ring_scanner_back">Back</string>

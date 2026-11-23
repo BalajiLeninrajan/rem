@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 enum class OnboardingStep { NOTIFICATIONS, BARCODE }
 
 /** Where the user goes when onboarding ends. */
-enum class OnboardingExit { HOME, ADD_BARCODE }
+enum class OnboardingExit { HOME, ADD_ALARM }
 
 data class OnboardingUiState(
     val step: OnboardingStep = OnboardingStep.NOTIFICATIONS,
