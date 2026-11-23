@@ -13,9 +13,15 @@ class IdleRingController : RingController {
 
     override val state: StateFlow<RingingState> = MutableStateFlow(RingingState.Idle)
 
+    override val snoozed: StateFlow<List<RingingState.Snoozed>> = MutableStateFlow(emptyList())
+
     override fun startRinging(ring: ScheduledRing): Boolean = false
 
     override fun resumeRinging(ring: ScheduledRing) = Unit
+
+    override fun endSnooze(ring: ScheduledRing) = Unit
+
+    override suspend fun snooze(): SnoozeResult = SnoozeResult.NOT_RINGING
 
     override suspend fun dismissWithBarcode(scanned: ScannedCode): DismissResult = DismissResult.NOT_RINGING
 

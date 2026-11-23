@@ -16,6 +16,8 @@ import dev.balaji.rem.ring.DismissResult
 import dev.balaji.rem.ring.MissedAlarm
 import dev.balaji.rem.ring.RingController
 import dev.balaji.rem.ring.RingingState
+import dev.balaji.rem.ring.SnoozeResult
+import dev.balaji.rem.ring.SnoozedAlarm
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
@@ -41,16 +43,29 @@ class RecordingNotifier : AlarmNotifier {
     override fun notifyMissed(missed: MissedAlarm) {
         this.missed += missed
     }
+
+    override fun notifySnoozed(snoozed: SnoozedAlarm) = Unit
+
+    override fun cancelSnoozed(alarmId: Long) = Unit
 }
 
 class RecordingRingController : RingController {
     val started = mutableListOf<ScheduledRing>()
     val resumed = mutableListOf<ScheduledRing>()
+    val snoozesEnded = mutableListOf<ScheduledRing>()
+
+    /** How often [snooze] and [dismissWithoutBarcode] were called. */
+    var snoozeCalls = 0
+        private set
+    var plainDismissals = 0
+        private set
 
     /** What [startRinging] answers. False stands for a ring that another ring swallowed. */
     var accepts = true
 
-    override val state: StateFlow<RingingState> = MutableStateFlow(RingingState.Idle)
+    override val state = MutableStateFlow<RingingState>(RingingState.Idle)
+
+    override val snoozed: StateFlow<List<RingingState.Snoozed>> = MutableStateFlow(emptyList())
 
     override fun startRinging(ring: ScheduledRing): Boolean {
         started += ring
@@ -61,11 +76,23 @@ class RecordingRingController : RingController {
         resumed += ring
     }
 
+    override fun endSnooze(ring: ScheduledRing) {
+        snoozesEnded += ring
+    }
+
+    override suspend fun snooze(): SnoozeResult {
+        snoozeCalls++
+        return SnoozeResult.SNOOZED
+    }
+
     override suspend fun dismissWithBarcode(scanned: ScannedCode) = DismissResult.NOT_RINGING
 
     override suspend fun dismissWithTypedCode(typed: String) = DismissResult.NOT_RINGING
 
-    override suspend fun dismissWithoutBarcode() = DismissResult.NOT_RINGING
+    override suspend fun dismissWithoutBarcode(): DismissResult {
+        plainDismissals++
+        return DismissResult.DISMISSED
+    }
 
     override fun newFallbackCode() = ""
 

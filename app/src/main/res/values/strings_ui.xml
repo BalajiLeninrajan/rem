@@ -59,9 +59,11 @@
     <!-- %1$s is the alarm label, %2$s the repeat summary. -->
     <string name="ui_home_label_and_repeat">%1$s, %2$s</string>
     <string name="ui_home_ringing_now">Ringing now</string>
+    <!-- %s is a clock time. -->
+    <string name="ui_home_snoozed_until">Snoozed until %s</string>
     <string name="ui_home_alarm_off">Off</string>
     <string name="ui_home_scheduling">Working out the ring time</string>
-    <string name="ui_home_alarm_no_barcode">No barcode. A plain button stops it.</string>
+    <string name="ui_home_alarm_no_barcode">No barcode. A plain button dismisses it.</string>
     <string name="ui_home_alarm_deleted">Alarm deleted</string>
     <string name="ui_home_empty_title">No alarms yet</string>
     <string name="ui_home_empty_body">Add the time you must be up by. rem picks the ring time from your sleep cycles.</string>
@@ -91,8 +93,11 @@
         <item quantity="other">No sleep cycle ends shortly before %1$s. Ring at %2$s instead, after %3$d cycles?</item>
     </plurals>
     <string name="ui_late_prompt_keep">Keep alarm times</string>
-    <string name="ui_home_warning_ringing">An alarm is ringing. It stops only from the ringing screen.</string>
+    <string name="ui_home_warning_ringing">An alarm is ringing.</string>
     <string name="ui_home_warning_ringing_action">Open the ringing screen</string>
+    <!-- %s is a clock time. -->
+    <string name="ui_home_warning_snoozed">An alarm is snoozed until %s.</string>
+    <string name="ui_home_warning_snoozed_action">Open the snoozed alarm</string>
     <plurals name="ui_home_warning_reliability">
         <item quantity="one">%d reliability check is failing. An alarm may not ring or may not show.</item>
         <item quantity="other">%d reliability checks are failing. An alarm may not ring or may not show.</item>
@@ -127,6 +132,13 @@
     <string name="ui_editor_ramp">Volume ramp</string>
     <string name="ui_editor_ramp_description">How long the sound takes to reach full volume.</string>
     <string name="ui_editor_ramp_off">Off</string>
+    <string name="ui_editor_snooze">Snooze</string>
+    <string name="ui_editor_snooze_limit">Snoozes per ring</string>
+    <string name="ui_editor_snooze_limit_description">How many times you can snooze before only dismiss is left. Snoozing needs no barcode.</string>
+    <string name="ui_editor_snooze_off">Off</string>
+    <string name="ui_editor_snooze_times">%d</string>
+    <string name="ui_editor_snooze_minutes">Snooze length</string>
+    <string name="ui_editor_snooze_minutes_description">How long the alarm stays quiet before it rings again.</string>
     <string name="ui_editor_barcodes">Barcodes</string>
     <string name="ui_editor_delete_title">Delete this alarm?</string>
 

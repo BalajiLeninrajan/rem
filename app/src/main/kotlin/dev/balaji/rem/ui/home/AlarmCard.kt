@@ -191,6 +191,7 @@ private fun ringStatus(row: AlarmRow, now: Instant, zone: ZoneId): String {
     val ring = row.nextRing
     return when {
         row.ringing -> stringResource(R.string.ui_home_ringing_now)
+        row.snoozedUntil != null -> stringResource(R.string.ui_home_snoozed_until, clockText(row.snoozedUntil, zone))
         !row.alarm.enabled -> stringResource(R.string.ui_home_alarm_off)
         ring != null -> ringLineText(ring.ringAt, ring.deadline, ring.explanation, now, zone)
         else -> stringResource(R.string.ui_home_scheduling)

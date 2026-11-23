@@ -32,6 +32,8 @@ class DataStoreRingStateStoreTest : RingStateStoreContract() {
         before.markFired(3, deadline)
         before.markFired(-7, deadline.plusSeconds(60))
         before.setScheduled(listOf(ring, ring.copy(alarmId = 4)))
+        val snoozed = record.copy(alarmId = 5, snoozes = 2, snoozedUntil = deadline.plusSeconds(300))
+        before.snooze(record.copy(alarmId = 5), snoozed)
         stores.close(file)
 
         val after = DataStoreRingStateStore(stores.open(file))
@@ -39,6 +41,15 @@ class DataStoreRingStateStoreTest : RingStateStoreContract() {
         assertEquals(record, after.currentRinging())
         assertEquals(mapOf(3L to deadline, -7L to deadline.plusSeconds(60)), after.lastFired())
         assertEquals(listOf(ring, ring.copy(alarmId = 4)), after.scheduled())
+        assertEquals(listOf(snoozed), after.currentSnoozed())
+    }
+
+    @Test
+    fun `an unreadable snoozed list reads as empty`() = runTest {
+        val preferences = stores.open()
+        preferences.edit { it[stringPreferencesKey("snoozed_rings")] = "not json" }
+
+        assertTrue(DataStoreRingStateStore(preferences).currentSnoozed().isEmpty())
     }
 
     @Test

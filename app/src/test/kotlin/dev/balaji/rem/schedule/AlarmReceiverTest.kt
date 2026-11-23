@@ -97,6 +97,19 @@ class AlarmReceiverTest {
     }
 
     @Test
+    fun `the end of a snooze rings again and neither records a fire nor reschedules`() = runTest {
+        val container = app.useFakeContainer(backgroundScope)
+
+        AlarmReceiver().onReceive(app, AlarmBroadcast.snoozeIntent(app, ring))
+        runCurrent()
+
+        assertEquals(listOf(ring), container.ringController.snoozesEnded)
+        assertTrue(container.ringController.started.isEmpty())
+        assertTrue(container.ringStateStore.lastFired().isEmpty())
+        assertTrue(container.alarmScheduler.reschedules.isEmpty())
+    }
+
+    @Test
     fun `a broadcast without a complete ring does nothing`() = runTest {
         val container = app.useFakeContainer(backgroundScope)
         val incomplete = AlarmBroadcast.fireIntent(app, ring).apply { removeExtra(AlarmBroadcast.EXTRA_RING_AT) }

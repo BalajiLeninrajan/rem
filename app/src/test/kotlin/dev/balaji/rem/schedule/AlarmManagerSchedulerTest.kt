@@ -522,6 +522,52 @@ class AlarmManagerSchedulerTest {
     }
 
     @Test
+    fun `a snoozed one-shot alarm stays out of the plan and is never reported as missed`() = runTest {
+        val scheduler = scheduler()
+        val once = alarms.upsert(sevenOnce)
+        val daily = alarms.upsert(sevenDaily.copy(time = LocalTime.of(8, 0)))
+        runCurrent()
+        val deadline = at("2026-01-15T07:00")
+
+        clock.now = deadline.plusSeconds(5)
+        val record = RingingRecord(once, startedAt = deadline, ringAt = deadline, deadline = deadline)
+        ringState.setRinging(record)
+        ringState.snooze(record, record.copy(snoozes = 1, snoozedUntil = deadline.plusSeconds(300)))
+        runCurrent()
+        confirmMissed()
+
+        assertEquals(listOf(daily), alarmClocks().map { it.alarmId })
+        assertNull(scheduler.plan.value.forAlarm(once))
+        assertTrue(notifier.missed.isEmpty())
+        assertEquals(true, alarms.get(once)?.enabled)
+    }
+
+    @Test
+    fun `the entry of a snoozed ring is not touched by a reschedule and can be cancelled`() = runTest {
+        val scheduler = scheduler()
+        val id = alarms.upsert(sevenDaily)
+        runCurrent()
+        val deadline = at("2026-01-15T07:00")
+        val clocks = AlarmClocks(context)
+        val until = clock.instant().plusSeconds(300)
+
+        assertTrue(clocks.setSnooze(ScheduledRing(id, deadline, deadline), until))
+        scheduler.rescheduleAll()
+        alarms.setEnabled(id, false)
+        runCurrent()
+
+        val left = shadowOf(alarmManager).scheduledAlarms.single()
+        assertEquals(AlarmBroadcast.ACTION_SNOOZE_END, shadowOf(left.operation).savedIntent.action)
+        assertEquals(until.toEpochMilli(), alarmManager.nextAlarmClock.triggerTime)
+
+        clocks.cancel()
+        clocks.cancelSnooze(id + 1)
+        assertEquals("the watchdog and other alarms have their own entries", 1, shadowOf(alarmManager).scheduledAlarms.size)
+        clocks.cancelSnooze(id)
+        assertNull(alarmManager.nextAlarmClock)
+    }
+
+    @Test
     fun `a session older than 16 hours is ended`() = runTest {
         sessions.start(clock.instant().minusSeconds(17 * 3600))
         val id = alarms.upsert(sevenDaily)

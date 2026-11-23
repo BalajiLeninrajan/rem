@@ -18,6 +18,8 @@ import java.time.ZoneId
  * @property minRingVolumePercent the alarm stream is held at or above this share of its
  *   range while the alarm rings.
  * @property volumeRampSeconds how long the tone takes to reach full volume. 0 disables the ramp.
+ * @property snoozeMinutes how long a snooze lasts before the alarm rings again.
+ * @property snoozeLimit how many times one ring can be snoozed. 0 turns snooze off.
  *
  * Stored values may be out of range (hand edits, a bug), so repositories pass everything
  * they read or write through [coerced].
@@ -32,13 +34,20 @@ data class Alarm(
     val ringtoneUri: String? = null,
     val minRingVolumePercent: Int = DEFAULT_MIN_RING_VOLUME_PERCENT,
     val volumeRampSeconds: Int = DEFAULT_VOLUME_RAMP_SECONDS,
+    val snoozeMinutes: Int = DEFAULT_SNOOZE_MINUTES,
+    val snoozeLimit: Int = DEFAULT_SNOOZE_LIMIT,
 ) {
     val isOneShot: Boolean get() = repeatDays.isEmpty()
 
-    /** This alarm with the volume fields moved into [MIN_RING_VOLUME_PERCENT] and [VOLUME_RAMP_SECONDS]. */
+    /**
+     * This alarm with the volume fields moved into [MIN_RING_VOLUME_PERCENT] and
+     * [VOLUME_RAMP_SECONDS], and the snooze fields into [SNOOZE_MINUTES] and [SNOOZE_LIMIT].
+     */
     fun coerced(): Alarm = copy(
         minRingVolumePercent = minRingVolumePercent.coerceIn(MIN_RING_VOLUME_PERCENT),
         volumeRampSeconds = volumeRampSeconds.coerceIn(VOLUME_RAMP_SECONDS),
+        snoozeMinutes = snoozeMinutes.coerceIn(SNOOZE_MINUTES),
+        snoozeLimit = snoozeLimit.coerceIn(SNOOZE_LIMIT),
     )
 
     /**
@@ -72,9 +81,15 @@ data class Alarm(
         const val NEW_ID = 0L
         const val DEFAULT_MIN_RING_VOLUME_PERCENT = 70
         const val DEFAULT_VOLUME_RAMP_SECONDS = 30
+        const val DEFAULT_SNOOZE_MINUTES = 5
+        const val DEFAULT_SNOOZE_LIMIT = 3
 
         val MIN_RING_VOLUME_PERCENT = 0..100
         val VOLUME_RAMP_SECONDS = 0..300
+        val SNOOZE_MINUTES = 1..30
+
+        /** 0 means snooze is off. */
+        val SNOOZE_LIMIT = 0..10
 
         private const val SEARCH_DAYS = 14L
     }

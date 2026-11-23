@@ -134,6 +134,8 @@ fun AlarmEditorScreen(
         onRingtoneChange = viewModel::setRingtone,
         onMinRingVolumeChange = viewModel::setMinRingVolumePercent,
         onVolumeRampChange = viewModel::setVolumeRampSeconds,
+        onSnoozeMinutesChange = viewModel::setSnoozeMinutes,
+        onSnoozeLimitChange = viewModel::setSnoozeLimit,
         onScanBarcode = onScanBarcode,
         onRenameBarcode = viewModel::renameBarcode,
         onRemoveBarcode = viewModel::removeBarcode,
@@ -155,6 +157,8 @@ fun AlarmEditorContent(
     onRingtoneChange: (String?) -> Unit,
     onMinRingVolumeChange: (Int) -> Unit,
     onVolumeRampChange: (Int) -> Unit,
+    onSnoozeMinutesChange: (Int) -> Unit,
+    onSnoozeLimitChange: (Int) -> Unit,
     onScanBarcode: (testOnly: Boolean) -> Unit,
     onRenameBarcode: (Barcode, String) -> Unit,
     onRemoveBarcode: (Barcode) -> Unit,
@@ -243,6 +247,13 @@ fun AlarmEditorContent(
                 onCommit = onVolumeRampChange,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
+            SnoozeSection(
+                snoozeMinutes = state.snoozeMinutes,
+                snoozeLimit = state.snoozeLimit,
+                onSnoozeMinutesChange = onSnoozeMinutesChange,
+                onSnoozeLimitChange = onSnoozeLimitChange,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
             if (!state.loading) {
                 AlarmBarcodesSection(
                     barcodes = state.barcodes,
@@ -282,6 +293,47 @@ fun AlarmEditorContent(
                 TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.ui_action_cancel)) }
             },
         )
+    }
+}
+
+/** How long a snooze lasts and how many one ring allows. A limit of 0 turns snooze off. */
+@Composable
+private fun SnoozeSection(
+    snoozeMinutes: Int,
+    snoozeLimit: Int,
+    onSnoozeMinutesChange: (Int) -> Unit,
+    onSnoozeLimitChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.ui_editor_snooze),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        SettingSlider(
+            title = stringResource(R.string.ui_editor_snooze_limit),
+            description = stringResource(R.string.ui_editor_snooze_limit_description),
+            value = snoozeLimit,
+            valueLabel = {
+                if (it == 0) stringResource(R.string.ui_editor_snooze_off) else stringResource(R.string.ui_editor_snooze_times, it)
+            },
+            range = Alarm.SNOOZE_LIMIT,
+            step = 1,
+            onCommit = onSnoozeLimitChange,
+        )
+        if (snoozeLimit > 0) {
+            SettingSlider(
+                title = stringResource(R.string.ui_editor_snooze_minutes),
+                description = stringResource(R.string.ui_editor_snooze_minutes_description),
+                value = snoozeMinutes,
+                valueLabel = { stringResource(R.string.ui_unit_minutes, it) },
+                range = Alarm.SNOOZE_MINUTES,
+                step = 1,
+                onCommit = onSnoozeMinutesChange,
+            )
+        }
     }
 }
 
@@ -409,6 +461,8 @@ private fun AlarmEditorPreview() {
             onRingtoneChange = {},
             onMinRingVolumeChange = {},
             onVolumeRampChange = {},
+            onSnoozeMinutesChange = {},
+            onSnoozeLimitChange = {},
             onScanBarcode = {},
             onRenameBarcode = { _, _ -> },
             onRemoveBarcode = {},

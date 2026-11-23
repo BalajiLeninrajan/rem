@@ -20,8 +20,8 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Builds a version 1 file with the statements from `schemas/.../1.json` and opens it with
- * [RemDatabase.open]. Room checks the migrated schema against the entities on open, so a
+ * Builds a version 1 or 2 file with the statements from `schemas/.../1.json` or `2.json`
+ * and opens it with [RemDatabase.open]. Room checks the migrated schema against the entities on open, so a
  * migration that leaves anything different fails here.
  */
 @RunWith(AndroidJUnit4::class)
@@ -42,13 +42,17 @@ class MigrationTest {
         storage.deleteDatabase(RemDatabase.FILE_NAME)
     }
 
-    private fun createVersion1(fill: SQLiteDatabase.() -> Unit) {
+    private fun createVersion1(fill: SQLiteDatabase.() -> Unit) = create(1, V1_SCHEMA, fill)
+
+    private fun createVersion2(fill: SQLiteDatabase.() -> Unit) = create(2, V2_SCHEMA, fill)
+
+    private fun create(version: Int, schema: List<String>, fill: SQLiteDatabase.() -> Unit) {
         val file = storage.getDatabasePath(RemDatabase.FILE_NAME)
         file.parentFile?.mkdirs()
         SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
-            V1_SCHEMA.forEach { db.execSQL(it) }
+            schema.forEach { db.execSQL(it) }
             db.fill()
-            db.version = 1
+            db.version = version
         }
     }
 
@@ -151,6 +155,53 @@ class MigrationTest {
         assertEquals(3L, id)
     }
 
+    @Test
+    fun `version 2 alarms keep their fields and get the default snooze`() = runTest {
+        createVersion2 {
+            execSQL(
+                "INSERT INTO alarms (id, time_of_day, label, repeat_days, enabled, vibrate, ringtone_uri, " +
+                    "min_ring_volume_percent, volume_ramp_seconds) " +
+                    "VALUES (4, ${LocalTime.of(6, 30).toSecondOfDay()}, 'work', ${RepeatDays.toMask(RepeatDays.WEEKDAYS)}, 1, 0, 'content://tone', 40, 0)",
+            )
+            execSQL("INSERT INTO barcodes (id, alarm_id, label, format, value) VALUES (2, 4, 'mug', 'QR_CODE', 'mug')")
+        }
+        val database = openMigrated()
+
+        val alarms = RoomAlarmRepository(database.alarmDao()).all()
+
+        assertEquals(
+            listOf(
+                Alarm(
+                    id = 4,
+                    time = LocalTime.of(6, 30),
+                    label = "work",
+                    repeatDays = RepeatDays.WEEKDAYS,
+                    vibrate = false,
+                    ringtoneUri = "content://tone",
+                    minRingVolumePercent = 40,
+                    volumeRampSeconds = 0,
+                    snoozeMinutes = Alarm.DEFAULT_SNOOZE_MINUTES,
+                    snoozeLimit = Alarm.DEFAULT_SNOOZE_LIMIT,
+                ),
+            ),
+            alarms,
+        )
+        assertEquals(listOf(Barcode(2, "mug", BarcodeFormat.QR_CODE, "mug")), RoomBarcodeRepository(database.barcodeDao()).all(4))
+    }
+
+    @Test
+    fun `migrated alarms store a changed snooze`() = runTest {
+        createVersion2 {
+            execSQL("INSERT INTO alarms VALUES (1, 25200, 'a', 0, 1, 1, NULL, 70, 30)")
+        }
+        val alarms = RoomAlarmRepository(openMigrated().alarmDao())
+
+        alarms.upsert(alarms.get(1)!!.copy(snoozeMinutes = 9, snoozeLimit = 0))
+
+        assertEquals(9, alarms.get(1)?.snoozeMinutes)
+        assertEquals(0, alarms.get(1)?.snoozeLimit)
+    }
+
     private fun rowCount(table: String): Long =
         database!!.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use { cursor ->
             cursor.moveToFirst()
@@ -165,6 +216,15 @@ class MigrationTest {
             "CREATE UNIQUE INDEX IF NOT EXISTS `index_barcodes_format_value` ON `barcodes` (`format`, `value`)",
             "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
             "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ecb14884e9d125dfe32485d1887b3931')",
+        )
+
+        /** `createSql`, index `createSql` and `setupQueries` of schemas/dev.balaji.rem.data.db.RemDatabase/2.json. */
+        val V2_SCHEMA = listOf(
+            "CREATE TABLE IF NOT EXISTS `alarms` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `time_of_day` INTEGER NOT NULL, `label` TEXT NOT NULL, `repeat_days` INTEGER NOT NULL, `enabled` INTEGER NOT NULL, `vibrate` INTEGER NOT NULL, `ringtone_uri` TEXT, `min_ring_volume_percent` INTEGER NOT NULL, `volume_ramp_seconds` INTEGER NOT NULL)",
+            "CREATE TABLE IF NOT EXISTS `barcodes` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `alarm_id` INTEGER NOT NULL, `label` TEXT NOT NULL, `format` TEXT NOT NULL, `value` TEXT NOT NULL, FOREIGN KEY(`alarm_id`) REFERENCES `alarms`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_barcodes_alarm_id_format_value` ON `barcodes` (`alarm_id`, `format`, `value`)",
+            "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+            "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6b2f79f0cb18ff2f467a3b9d6a1e82b5')",
         )
     }
 }
