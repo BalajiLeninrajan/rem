@@ -97,6 +97,8 @@
     <string name="ui_editor_ringtone_default">rem default tone</string>
     <string name="ui_editor_ringtone_custom">Custom sound</string>
     <string name="ui_editor_ringtone_reset">Use the rem default tone</string>
+    <string name="ui_editor_ringtone_play">Play the alarm sound</string>
+    <string name="ui_editor_ringtone_stop">Stop the alarm sound</string>
     <string name="ui_editor_ringtone_picker_missing">This phone has no sound picker</string>
     <string name="ui_editor_min_volume">Minimum ring volume</string>
     <string name="ui_editor_min_volume_description">The alarm volume is raised to this level and held there while it rings.</string>

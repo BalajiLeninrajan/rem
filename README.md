@@ -9,6 +9,7 @@ It needs Android 12 or newer. It has no accounts, no analytics and no network pe
 ## What it does
 
 - Each alarm has a "must wake by" time, repeat days, a label, a ringtone, a vibrate switch, a volume floor, a volume ramp and its own barcodes. One barcode can be registered on several alarms.
+- The play button next to the alarm sound plays it in the editor on the alarm stream, raised to the alarm's volume floor. That includes the bundled tone, which the system sound picker does not list.
 - Barcodes are added, test-scanned, renamed and deleted in the alarm's editor. A new alarm's barcodes are stored when you save it.
 - "Duplicate", in an alarm card's menu or the editor's top bar, opens a new alarm with the same time, label, days, sound and barcodes. Nothing is stored until you save the copy.
 - Press "going to sleep" and every alarm due in the next 16 hours moves to the end of a 90 minute cycle, if one ends within 30 minutes before its deadline. Otherwise it rings at the deadline. It never rings later. The home screen shows the ring time and the reason, for example "Rings 06:45, 5 cycles, 15 min before 07:00".

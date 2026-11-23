@@ -217,6 +217,7 @@ fun AlarmEditorContent(
             )
             RingtoneRow(
                 ringtoneUri = state.ringtoneUri,
+                minRingVolumePercent = state.minRingVolumePercent,
                 onRingtoneChange = onRingtoneChange,
                 onPickerMissing = { scope.launch { snackbarHostState.showSnackbar(pickerMissingMessage) } },
             )

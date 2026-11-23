@@ -21,7 +21,7 @@ All the rules live here, as pure functions and small value types, with unit test
 |---|---|
 | `data` | Repository interfaces, `RingStateStore`, `DataModule`. `data.db` is Room (`RemDatabase`, alarms and barcodes, `Migrations.kt`). The migration to version 2 gives every alarm the old default volume floor and ramp and turns headphones only off, because it cannot read the version 1 values from DataStore. Each barcode row belongs to one alarm through a foreign key that deletes it with the alarm, and is unique per alarm and key. `data.store` is Preferences DataStore (settings, sleep session, ring state). |
 | `schedule` | `AlarmScheduler` and its implementation `AlarmManagerScheduler`, `AlarmClocks` (the `setAlarmClock` calls), `AlarmReceiver`, `RescheduleReceiver`, `AlarmBroadcast`, `ScheduleModule.kt` |
-| `ring` | `RingController` and `DefaultRingController`, `RingingService`, `RingNotifications`, `RingingActivity`, `RingModule.kt`. `ring.audio` is the player, headphone routing, volume floor and vibration. `ring.ui` is the ringing, scanner and typed fallback screens. |
+| `ring` | `RingController` and `DefaultRingController`, `RingingService`, `RingNotifications`, `RingingActivity`, `RingModule.kt`. `ring.audio` is the player, headphone routing, volume floor and vibration, and `AlarmTonePreviewPlayback`, which the editor's play button uses. `ring.ui` is the ringing, scanner and typed fallback screens. |
 | `scan` | `BarcodeScanner` composable and `ScannerCamera` (CameraX with the bundled ML Kit model) |
 | `ui` | Every non-ringing screen with its view model, navigation, theme, `AppLinks`, `ui.system` (system checks and settings openers) |
 | `di` | `AppContainer`, `DefaultAppContainer`, `SystemZoneClock`, access helpers |
@@ -51,6 +51,7 @@ The in-memory repositories (`data.fake`) and the stand-in controllers and schedu
 - Barcodes are edited only in the alarm editor. `AlarmEditorViewModel` is the `BarcodeTarget` of the scan screen (`BarcodeScanRoute`, opened from the editor), which checks a scan against the alarm's barcodes and hands a new one back. For a stored alarm the editor writes added, renamed and deleted barcodes at once. A new alarm holds them in the view model until save.
 - A duplicate is a new alarm. "Duplicate" opens `AlarmEditorRoute(copyFromId = id)`, and the view model copies the stored source alarm into its draft and the source's barcodes into its unsaved list. From an existing alarm's editor the copy opens on top, so that editor's unsaved changes are still there when the copy closes, but they are not copied.
 - `AlarmRepository.upsertWithBarcodes` saves an alarm and barcodes for it in one transaction, so a new alarm and its first barcodes are stored together. `upsert` updates a row in place and never replaces it, because a replace would delete the alarm's barcodes through the foreign key.
+- The editor's play button (`RingtoneRow`) plays the alarm's tone through `TonePreview`, which holds no Android code, and `AlarmTonePreviewPlayback`, which reuses `AlarmAudioPlayer` and `AlarmVolumeFloor`: the alarm stream, the bundled tone when none is picked, the alarm's volume floor and no ramp. It stops on a second tap, on another tone, and when the editor stops or leaves composition. The system ringtone picker cannot play the bundled tone and plays its own previews at the current alarm volume, which is why the editor has its own button.
 - `ring` writes `RingStateStore.setRinging` and `clearRinging`, disables one-shot alarms when their ring ends, and ends the sleep session when a ring it covers is dismissed. It calls `removeFired` when a ring ends undismissed with its deadline still ahead.
 
 ## From "alarm saved" to "barcode scanned"
@@ -104,7 +105,7 @@ The app does not use the network. The manifest removes `INTERNET` and `ACCESS_NE
 
 ## Tests
 
-`:core` has plain JUnit tests. `:app` tests run on the JVM with Robolectric and coroutines-test: contract tests for every repository (run against Room, DataStore and the in-memory fakes), the scheduler against Robolectric's AlarmManager, the ring controller with a fake service launcher, the view models, `MigrationTest` (builds a version 1 database file by hand and opens it with `RemDatabase.open`, so Room checks the migrated schema), and `AlarmFlowTest`, which runs whole flows on the real container. Nothing covers the service, the audio classes, the camera or the Compose screens. No part of the app has run on a device yet.
+`:core` has plain JUnit tests. `:app` tests run on the JVM with Robolectric and coroutines-test: contract tests for every repository (run against Room, DataStore and the in-memory fakes), the scheduler against Robolectric's AlarmManager, the ring controller with a fake service launcher, the view models, `TonePreview`, `MigrationTest` (builds a version 1 database file by hand and opens it with `RemDatabase.open`, so Room checks the migrated schema), and `AlarmFlowTest`, which runs whole flows on the real container. Nothing covers the service, the audio classes, the camera or the Compose screens. No part of the app has run on a device yet.
 
 ## Build
 
