@@ -202,7 +202,7 @@
     <string name="ui_test_alarm_title">Test it</string>
     <string name="ui_test_alarm_body">Sets a real alarm one minute from now. Press the button, then lock the phone and wait.</string>
     <!-- %s is a clock time. -->
-    <string name="ui_test_alarm_scheduled">Test alarm set for %s. Lock the phone now and wait. Stop it the same way as a real alarm.</string>
+    <string name="ui_test_alarm_scheduled">Test alarm set for %s. Lock the phone now and wait. It needs no barcode: stop it with the button on the ringing screen.</string>
     <string name="ui_test_alarm_refused">The test alarm was not set. This phone does not let rem set exact alarms. Fix the Exact alarms check above and try again.</string>
     <string name="ui_test_alarm_button">Test alarm in 1 minute</string>
     <string name="ui_oem_title">Battery managers</string>

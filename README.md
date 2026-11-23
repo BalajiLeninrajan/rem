@@ -30,7 +30,7 @@ gh run download --name rem-debug-apk
 adb install app-debug.apk
 ```
 
-After installing, create an alarm, add a barcode to it, open the reliability screen and run the test alarm with the phone locked.
+After installing, create an alarm, add a barcode to it, open the reliability screen and run the test alarm with the phone locked. The test alarm checks that a locked phone rings. It needs no barcode and stops with a plain button, so try the scanner on your real alarm's first ring.
 
 ## Build
 
