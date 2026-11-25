@@ -30,6 +30,7 @@ import dev.balaji.rem.core.WakeExplanation
 import dev.balaji.rem.ui.components.ClockText
 import dev.balaji.rem.ui.format.clockText
 import dev.balaji.rem.ui.format.ringTimeText
+import dev.balaji.rem.ui.format.sleepLengthText
 import dev.balaji.rem.ui.format.wakeExplanationText
 import dev.balaji.rem.ui.theme.ClockType
 import dev.balaji.rem.ui.theme.RemTheme
@@ -73,7 +74,14 @@ private fun ReadyCard(preview: PlannedRing?, now: Instant, zone: ZoneId, onGoToS
             ) {
                 Icon(imageVector = Icons.Filled.Bedtime, contentDescription = null)
                 Spacer(Modifier.width(12.dp))
-                Text(text = stringResource(R.string.ui_home_going_to_sleep), style = MaterialTheme.typography.titleLarge)
+                Text(
+                    text = if (preview == null) {
+                        stringResource(R.string.ui_home_going_to_sleep)
+                    } else {
+                        stringResource(R.string.ui_home_sleep_for, sleepLengthText(now, preview.ringAt))
+                    },
+                    style = MaterialTheme.typography.titleLarge,
+                )
             }
             Text(
                 text = if (preview == null) {
