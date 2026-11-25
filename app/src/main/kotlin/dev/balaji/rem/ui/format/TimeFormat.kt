@@ -51,3 +51,16 @@ fun ringTimeText(at: Instant, now: Instant, zone: ZoneId): String {
 /** Calendar days from [from] to [to] in [zone]. 23:59 to 00:01 is one day. */
 fun daysBetween(from: Instant, to: Instant, zone: ZoneId): Long =
     ChronoUnit.DAYS.between(from.atZone(zone).toLocalDate(), to.atZone(zone).toLocalDate())
+
+/** Whole minutes from [from] to [to] as "7h 45m", "8h" or "40m". Negative spans read as 0m. */
+@Composable
+fun sleepLengthText(from: Instant, to: Instant): String {
+    val minutes = ChronoUnit.MINUTES.between(from, to).coerceAtLeast(0).toInt()
+    val hours = minutes / 60
+    val rest = minutes % 60
+    return when {
+        hours == 0 -> stringResource(R.string.ui_duration_minutes, rest)
+        rest == 0 -> stringResource(R.string.ui_duration_hours, hours)
+        else -> stringResource(R.string.ui_duration_hours_minutes, hours, rest)
+    }
+}
