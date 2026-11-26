@@ -22,14 +22,29 @@ android {
         applicationId = "dev.balaji.rem"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        // The release workflow passes the tag and the run number.
+        versionCode = providers.gradleProperty("rem.versionCode").orNull?.toInt() ?: 1
+        versionName = providers.gradleProperty("rem.versionName").orNull ?: "0.1.0"
+    }
+
+    // Release signing comes from the environment. Without it the release APK is unsigned.
+    val keystore = providers.environmentVariable("REM_KEYSTORE_PATH").orNull
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = providers.environmentVariable("REM_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("REM_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("REM_KEY_PASSWORD").get()
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (keystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 

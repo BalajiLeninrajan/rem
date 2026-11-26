@@ -115,3 +115,5 @@ The app does not use the network. The manifest removes `INTERNET` and `ACCESS_NE
 ## Build
 
 CI (`.github/workflows/build.yml`) runs `./gradlew :core:test :app:assembleDebug :app:testDebugUnitTest` on every push and uploads the debug APK as the `rem-debug-apk` artifact.
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, builds a release APK signed with the key in the `REM_KEYSTORE_*` and `REM_KEY_*` secrets and publishes it as a GitHub release. Its version name is the tag without the `v`, and its version code is the workflow's run number. Without those environment variables `assembleRelease` builds an unsigned APK.
