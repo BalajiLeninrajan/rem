@@ -1,21 +1,14 @@
 package dev.balaji.rem.ui.testing
 
-import dev.balaji.rem.core.ScannedCode
 import dev.balaji.rem.core.SchedulePlan
-import dev.balaji.rem.core.ScheduledRing
 import dev.balaji.rem.core.planSchedule
 import dev.balaji.rem.data.AlarmRepository
 import dev.balaji.rem.data.SettingsRepository
 import dev.balaji.rem.data.SleepSessionRepository
-import dev.balaji.rem.ring.DismissResult
-import dev.balaji.rem.ring.RingController
-import dev.balaji.rem.ring.RingingState
-import dev.balaji.rem.ring.SnoozeResult
 import dev.balaji.rem.schedule.AlarmBroadcast
 import dev.balaji.rem.schedule.AlarmScheduler
 import java.time.Clock
 import java.time.Instant
-import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,14 +35,6 @@ fun <T> TestScope.keepCollecting(flow: StateFlow<T>) {
     backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { flow.collect {} }
 }
 
-class MutableClock(var now: Instant, private val zoneId: ZoneId) : Clock() {
-    override fun getZone(): ZoneId = zoneId
-
-    override fun withZone(zone: ZoneId): Clock = MutableClock(now, zone)
-
-    override fun instant(): Instant = now
-}
-
 /** Publishes a real plan computed from the repositories, when the test asks for it. Never touches AlarmManager. */
 class FakeAlarmScheduler(
     private val alarms: AlarmRepository,
@@ -70,33 +55,4 @@ class FakeAlarmScheduler(
 
     override suspend fun scheduleTestAlarm(): Instant? =
         if (exactAlarmsAllowed) clock.instant().plus(AlarmBroadcast.TEST_ALARM_DELAY) else null
-}
-
-/** A ring controller whose state the test sets directly. */
-class FakeRingController : RingController {
-    override val state = MutableStateFlow<RingingState>(RingingState.Idle)
-
-    override val snoozed = MutableStateFlow<List<RingingState.Snoozed>>(emptyList())
-
-    override fun startRinging(ring: ScheduledRing): Boolean = false
-
-    override fun resumeRinging(ring: ScheduledRing) = Unit
-
-    override fun endSnooze(ring: ScheduledRing) = Unit
-
-    override suspend fun snooze(): SnoozeResult = SnoozeResult.NOT_RINGING
-
-    override suspend fun dismissWithBarcode(scanned: ScannedCode): DismissResult = DismissResult.NOT_RINGING
-
-    override suspend fun dismissWithTypedCode(typed: String): DismissResult = DismissResult.NOT_RINGING
-
-    override suspend fun dismissWithoutBarcode(): DismissResult = DismissResult.NOT_RINGING
-
-    override fun newFallbackCode(): String = ""
-
-    override fun startQuietPeriod() = Unit
-
-    override fun endQuietPeriod() = Unit
-
-    override suspend fun recoverInterruptedRing() = Unit
 }

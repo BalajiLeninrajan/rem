@@ -11,7 +11,7 @@ import dev.balaji.rem.ui.system.DoNotDisturb
 import dev.balaji.rem.ui.system.SystemChecks
 import dev.balaji.rem.ui.testing.FakeAlarmScheduler
 import dev.balaji.rem.ui.testing.MainDispatcherRule
-import dev.balaji.rem.ui.testing.MutableClock
+import dev.balaji.rem.testing.MutableClock
 import dev.balaji.rem.ui.testing.keepCollecting
 import java.time.Instant
 import java.time.LocalTime
