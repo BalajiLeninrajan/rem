@@ -18,9 +18,9 @@ import dev.balaji.rem.ring.RingingState
 import dev.balaji.rem.schedule.AlarmBroadcast
 import dev.balaji.rem.ui.system.SystemChecks
 import dev.balaji.rem.ui.testing.FakeAlarmScheduler
-import dev.balaji.rem.ui.testing.FakeRingController
+import dev.balaji.rem.testing.FakeRingController
 import dev.balaji.rem.ui.testing.MainDispatcherRule
-import dev.balaji.rem.ui.testing.MutableClock
+import dev.balaji.rem.testing.MutableClock
 import dev.balaji.rem.ui.testing.keepCollecting
 import java.time.Instant
 import java.time.LocalDateTime

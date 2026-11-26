@@ -73,13 +73,7 @@ class AlarmManagerScheduler(
                 .collect {
                     // A failed run, for example a storage error, must not end the collection.
                     // The next change or the next process start tries again.
-                    try {
-                        rescheduleAll()
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Reschedule after a change failed", e)
-                    }
+                    logFailure("reschedule after a change") { rescheduleAll() }
                 }
         }
     }
@@ -88,7 +82,7 @@ class AlarmManagerScheduler(
         mutex.withLock {
             // Arming comes first. Every bookkeeping step around it is best effort, so a
             // write that fails, for example on a full disk, cannot keep the alarms from being set.
-            bookkeeping("in-flight wait") { awaitRingInFlight() }
+            logFailure("in-flight wait") { awaitRingInFlight() }
             val now = clock.instant()
             val activeSession = activeSession(now)
             // The ring in progress and the snoozed ones. A snoozed ring has not ended.
@@ -106,7 +100,7 @@ class AlarmManagerScheduler(
             val storedIds = stored.mapTo(mutableSetOf()) { it.id }
             // A switched-off alarm needs no fired record. Without one, switching it back on plans its next real occurrence.
             val enabledIds = stored.filter { it.enabled }.mapTo(mutableSetOf()) { it.id }
-            bookkeeping("fired cleanup") { ringState.retainFired(enabledIds) }
+            logFailure("fired cleanup") { ringState.retainFired(enabledIds) }
             val session = activeSession?.let { withoutLateConsentOf(it, it.acceptedLate.keys - enabledIds) }
             // A one-shot alarm that is ringing or snoozed has no next occurrence. The ring disables it when it is dismissed.
             // Once it has been edited to another time it is a new occurrence and is planned like any other.
@@ -124,7 +118,7 @@ class AlarmManagerScheduler(
             // persisted, so each one that passes is reported as missed.
             if (alarmClocks.canSchedule()) plan.rings.forEach { alarmClocks.set(it.toScheduledRing()) }
 
-            bookkeeping("scheduled rings") {
+            logFailure("scheduled rings") {
                 ringState.setScheduled(plan.rings.map { it.toScheduledRing() } + check.pending + unconfirmed)
             }
             currentPlan.value = plan
@@ -166,7 +160,7 @@ class AlarmManagerScheduler(
         val horizon = now.plus(MAX_FIRED_AHEAD)
         val records = readOr(emptyMap()) { ringState.lastFired() }
         val (stale, sound) = records.entries.partition { it.value > horizon }
-        stale.forEach { bookkeeping("stale fired record") { ringState.removeFired(it.key) } }
+        stale.forEach { logFailure("stale fired record") { ringState.removeFired(it.key) } }
         return sound.associate { it.key to it.value }
     }
 
@@ -186,7 +180,7 @@ class AlarmManagerScheduler(
      */
     private suspend fun withoutLateConsentOf(session: SleepSession, alarmIds: Set<Long>): SleepSession {
         if (alarmIds.isEmpty()) return session
-        alarmIds.forEach { bookkeeping("late consent cleanup") { sessions.revokeLate(it) } }
+        alarmIds.forEach { logFailure("late consent cleanup") { sessions.revokeLate(it) } }
         return session.copy(acceptedLate = session.acceptedLate - alarmIds)
     }
 
@@ -194,7 +188,7 @@ class AlarmManagerScheduler(
     private suspend fun activeSession(now: Instant): SleepSession? {
         val session = readOr(null) { sessions.current() } ?: return null
         if (session.isActive(now)) return session
-        bookkeeping("stale session") { sessions.end() }
+        logFailure("stale session") { sessions.end() }
         return null
     }
 
@@ -207,8 +201,8 @@ class AlarmManagerScheduler(
     private suspend fun reportMissed(missed: List<ScheduledRing>, ringing: List<RingingRecord>) {
         for (ring in missed) {
             if (ringing.any { it.alarmId == ring.alarmId }) continue
-            bookkeeping("missed report") {
-                val alarm = alarms.get(ring.alarmId)?.takeIf { it.enabled } ?: return@bookkeeping
+            logFailure("missed report") {
+                val alarm = alarms.get(ring.alarmId)?.takeIf { it.enabled } ?: return@logFailure
                 notifier.notifyMissed(MissedAlarm(alarm.id, alarm.label, ring.deadline, MissedReason.NOT_FIRED))
                 if (alarm.isOneShot && alarm.isOccurrence(ring.alarmId, ring.deadline)) alarms.setEnabled(alarm.id, false)
             }
@@ -228,13 +222,7 @@ class AlarmManagerScheduler(
             delay(MISSED_CONFIRM_DELAY.toMillis())
             confirmedMissed += fresh
             awaitingConfirmation -= fresh.toSet()
-            try {
-                rescheduleAll()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "Reschedule for the missed check failed", e)
-            }
+            logFailure("reschedule for the missed check") { rescheduleAll() }
         }
     }
 
@@ -248,13 +236,13 @@ class AlarmManagerScheduler(
             default
         }
 
-    private suspend fun bookkeeping(what: String, step: suspend () -> Unit) {
+    private suspend fun logFailure(what: String, step: suspend () -> Unit) {
         try {
             step()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Bookkeeping failed: $what", e)
+            Log.e(TAG, "Failed: $what", e)
         }
     }
 

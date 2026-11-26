@@ -20,11 +20,11 @@ All the rules live here, as pure functions and small value types, with unit test
 | Package | Holds |
 |---|---|
 | `data` | Repository interfaces, `RingStateStore`, `DataModule`. `data.db` is Room (`RemDatabase`, alarms and barcodes, `Migrations.kt`). The migration to version 2 gives every alarm the old default volume floor and ramp and turns headphones only off, because it cannot read the version 1 values from DataStore. The migration to version 3 adds the snooze length and limit at their defaults. Each barcode row belongs to one alarm through a foreign key that deletes it with the alarm, and is unique per alarm and key. `data.store` is Preferences DataStore (settings, sleep session, ring state). |
-| `schedule` | `AlarmScheduler` and its implementation `AlarmManagerScheduler`, `AlarmClocks` (the `setAlarmClock` calls), `AlarmReceiver`, `RescheduleReceiver`, `AlarmBroadcast`, `ScheduleModule.kt` |
-| `ring` | `RingController` and `DefaultRingController`, `RingingService`, `RingNotifications`, `RingActionReceiver` (the Snooze and Dismiss notification actions), `RingingActivity`, `RingModule.kt`. `ring.audio` is the player, headphone routing, volume floor and vibration, and `AlarmTonePreviewPlayback`, which the editor's play button uses. `ring.ui` is the ringing, scanner and typed fallback screens. |
+| `schedule` | `AlarmScheduler` and its implementation `AlarmManagerScheduler`, `AlarmClocks` (the `setAlarmClock` calls), `AlarmReceiver`, `RescheduleReceiver`, `AlarmBroadcast` |
+| `ring` | `RingController` and `DefaultRingController`, `RingingService`, `RingNotifications`, `RingActionReceiver` (the Snooze and Dismiss notification actions), `RingingActivity`. `ring.audio` is the player, headphone routing, volume floor and vibration, and `AlarmTonePreviewPlayback`, which the editor's play button uses. `ring.ui` is the ringing, scanner and typed fallback screens. |
 | `scan` | `BarcodeScanner` composable and `ScannerCamera` (CameraX with the bundled ML Kit model) |
 | `ui` | Every non-ringing screen with its view model, navigation, theme, `AppLinks`, `ui.system` (system checks and settings openers) |
-| `di` | `AppContainer`, `DefaultAppContainer`, `SystemZoneClock`, access helpers |
+| `di` | `AppContainer`, `DefaultAppContainer`, access helpers |
 
 `MainActivity` and `RemApplication` sit in the root package. Strings are in `strings_ring.xml` (`ring_` prefix) and `strings_ui.xml` (`ui_` prefix), with `strings.xml` for the app name and screen titles.
 
@@ -32,12 +32,7 @@ All the rules live here, as pure functions and small value types, with unit test
 
 There is no DI framework. `RemApplication` holds one `DefaultAppContainer`. Get it with `context.appContainer`, or `LocalAppContainer.current` in Compose. Build view models with `containerViewModel { MyViewModel(it.alarmRepository) }`. `containerViewModel(owner) { ... }` scopes one to another back stack entry, which is how the scan screen reaches the editor below it.
 
-`DefaultAppContainer` never names a concrete class. It calls one module file per package:
-
-- `DataModule(context)` opens Room and three DataStore files on `context.createDeviceProtectedStorageContext()`. One instance per process, because DataStore rejects a second instance on the same file.
-- `createAlarmScheduler` builds `AlarmManagerScheduler`.
-- `createRingController` builds `DefaultRingController`. It reaches the scheduler through a lambda, so neither is created inside the other's constructor.
-- `createAlarmNotifier` builds `RingNotifications`.
+`DefaultAppContainer` builds everything. `DataModule(context)` opens Room and three DataStore files on `context.createDeviceProtectedStorageContext()`, one instance per process, because DataStore rejects a second instance on the same file. `DefaultRingController` reaches the scheduler through a lambda, so neither is created inside the other's constructor. The clock asks for the system zone on every call, so deadlines follow a timezone change.
 
 Everything in the container is lazy. `applicationScope` has a `SupervisorJob` and an exception handler that logs, so failed background work does not kill a process that may be ringing.
 
@@ -115,7 +110,7 @@ The app does not use the network. The manifest removes `INTERNET` and `ACCESS_NE
 
 ## Tests
 
-`:core` has plain JUnit tests. `:app` tests run on the JVM with Robolectric and coroutines-test: contract tests for every repository (run against Room, DataStore and the in-memory fakes), the scheduler against Robolectric's AlarmManager, the ring controller with a fake service launcher, the view models, `TonePreview`, `MigrationTest` (builds version 1 and version 2 database files by hand and opens them with `RemDatabase.open`, so Room checks the migrated schema), and `AlarmFlowTest`, which runs whole flows on the real container. Nothing covers the service, the audio classes, the camera or the Compose screens. No part of the app has run on a device yet.
+`:core` has plain JUnit tests. `:app` tests run on the JVM with Robolectric and coroutines-test: contract tests for every repository (run against Room, DataStore and the in-memory fakes), the scheduler against Robolectric's AlarmManager, the ring controller with a fake service launcher, the view models, `TonePreview`, `MigrationTest` (builds version 1 and version 2 database files by hand and opens them with `RemDatabase.open`, so Room checks the migrated schema), and `AlarmFlowTest`, which runs whole flows on the real container. Nothing automated covers the service, the audio classes, the camera or the Compose screens. Those get checked by hand on a device.
 
 ## Build
 

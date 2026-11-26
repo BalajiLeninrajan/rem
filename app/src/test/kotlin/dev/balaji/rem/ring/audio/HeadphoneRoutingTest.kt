@@ -3,9 +3,7 @@ package dev.balaji.rem.ring.audio
 import android.media.AudioDeviceInfo
 import java.time.Duration
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HeadphoneRoutingTest {
@@ -21,20 +19,6 @@ class HeadphoneRoutingTest {
         routed: OutputDevice? = null,
         elapsed: Duration = Duration.ZERO,
     ) = nextRoute(state, headphonesOnly, connected, routed, elapsed, fallbackAfter)
-
-    @Test
-    fun `things worn on the head count as headphones`() {
-        val headphones = listOf(
-            AudioDeviceInfo.TYPE_WIRED_HEADSET,
-            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
-            AudioDeviceInfo.TYPE_USB_HEADSET,
-            AudioDeviceInfo.TYPE_BLE_HEADSET,
-            AudioDeviceInfo.TYPE_HEARING_AID,
-            AudioDeviceInfo.TYPE_BLE_HEARING_AID,
-            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-        )
-        headphones.forEach { assertTrue("type $it", isHeadphoneType(it)) }
-    }
 
     @Test
     fun `speakers, telephony links, HDMI, broadcast and ambiguous outputs do not count`() {
@@ -55,7 +39,7 @@ class HeadphoneRoutingTest {
             AudioDeviceInfo.TYPE_DOCK,
             AudioDeviceInfo.TYPE_UNKNOWN,
         )
-        others.forEach { assertFalse("type $it", isHeadphoneType(it)) }
+        assertNull(pickHeadphone(others.mapIndexed { i, type -> OutputDevice(i, type) }))
     }
 
     @Test

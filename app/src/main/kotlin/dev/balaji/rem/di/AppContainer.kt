@@ -13,7 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 
 /** Every app-wide dependency. One instance lives on `RemApplication`. No DI framework. */
 interface AppContainer {
-    /** Now and the current system zone. The zone follows timezone changes, see [SystemZoneClock]. */
+    /** Now and the current system zone. The zone follows timezone changes. */
     val clock: Clock
 
     /** Lives as long as the process. Uses a SupervisorJob and Dispatchers.Default. */

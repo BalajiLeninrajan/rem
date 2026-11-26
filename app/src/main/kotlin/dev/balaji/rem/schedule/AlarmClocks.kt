@@ -3,6 +3,7 @@ package dev.balaji.rem.schedule
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import dev.balaji.rem.core.ScheduledRing
 import dev.balaji.rem.ring.RingContract
 import dev.balaji.rem.ring.RingWatchdog
@@ -25,55 +26,33 @@ internal class AlarmClocks(private val context: Context) : RingWatchdog, SnoozeA
     fun canSchedule(): Boolean = alarmManager.canScheduleExactAlarms()
 
     /** Call only when [canSchedule] is true. AlarmManager throws otherwise. */
-    fun set(ring: ScheduledRing) {
-        val operation = PendingIntent.getBroadcast(
-            context,
-            0,
-            AlarmBroadcast.fireIntent(context, ring),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(ring.ringAt.toEpochMilli(), showIntent(ring.alarmId)), operation)
-    }
+    fun set(ring: ScheduledRing) = setEntry(AlarmBroadcast.fireIntent(context, ring), ring.ringAt, showIntent(ring.alarmId))
 
     /** Does nothing when the id has no entry. */
-    fun cancel(alarmId: Long) {
-        val sameIdentity = AlarmBroadcast.fireIntent(context, ScheduledRing(alarmId, Instant.EPOCH, Instant.EPOCH))
-        val operation = PendingIntent.getBroadcast(
-            context,
-            0,
-            sameIdentity,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE,
-        ) ?: return
-        alarmManager.cancel(operation)
-        operation.cancel()
-    }
+    fun cancel(alarmId: Long) = cancelEntry(AlarmBroadcast.fireIntent(context, identity(alarmId)))
 
     override fun arm(ring: ScheduledRing, at: Instant): Boolean {
         if (!canSchedule()) return false
-        val operation = PendingIntent.getBroadcast(
-            context,
-            0,
-            AlarmBroadcast.resumeIntent(context, ring),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(at.toEpochMilli(), showRinging()), operation)
+        setEntry(AlarmBroadcast.resumeIntent(context, ring), at, showRinging())
         return true
     }
+
+    override fun cancel() = cancelEntry(AlarmBroadcast.resumeIntent(context, identity(0)))
 
     override fun setSnooze(ring: ScheduledRing, at: Instant): Boolean {
         if (!canSchedule()) return false
-        val operation = PendingIntent.getBroadcast(
-            context,
-            0,
-            AlarmBroadcast.snoozeIntent(context, ring),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(at.toEpochMilli(), showRinging()), operation)
+        setEntry(AlarmBroadcast.snoozeIntent(context, ring), at, showRinging())
         return true
     }
 
-    override fun cancelSnooze(alarmId: Long) {
-        val sameIdentity = AlarmBroadcast.snoozeIntent(context, ScheduledRing(alarmId, Instant.EPOCH, Instant.EPOCH))
+    override fun cancelSnooze(alarmId: Long) = cancelEntry(AlarmBroadcast.snoozeIntent(context, identity(alarmId)))
+
+    private fun setEntry(broadcast: Intent, at: Instant, show: PendingIntent) {
+        val operation = PendingIntent.getBroadcast(context, 0, broadcast, IMMUTABLE_UPDATE)
+        alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(at.toEpochMilli(), show), operation)
+    }
+
+    private fun cancelEntry(sameIdentity: Intent) {
         val operation = PendingIntent.getBroadcast(
             context,
             0,
@@ -83,27 +62,13 @@ internal class AlarmClocks(private val context: Context) : RingWatchdog, SnoozeA
         alarmManager.cancel(operation)
         operation.cancel()
     }
+
+    /** A ring whose intent has the same PendingIntent identity as every ring of [alarmId]. */
+    private fun identity(alarmId: Long) = ScheduledRing(alarmId, Instant.EPOCH, Instant.EPOCH)
 
     /** The ringing screen, which shows a snoozed ring too. */
     private fun showRinging(): PendingIntent =
-        PendingIntent.getActivity(
-            context,
-            0,
-            RingContract.activityIntent(context),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-
-    override fun cancel() {
-        val sameIdentity = AlarmBroadcast.resumeIntent(context, ScheduledRing(0, Instant.EPOCH, Instant.EPOCH))
-        val operation = PendingIntent.getBroadcast(
-            context,
-            0,
-            sameIdentity,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE,
-        ) ?: return
-        alarmManager.cancel(operation)
-        operation.cancel()
-    }
+        PendingIntent.getActivity(context, 0, RingContract.activityIntent(context), IMMUTABLE_UPDATE)
 
     /**
      * What the system opens when the user taps the next-alarm entry. The alarm id is the
@@ -116,11 +81,10 @@ internal class AlarmClocks(private val context: Context) : RingWatchdog, SnoozeA
         } else {
             AppLinks.editAlarm(context, alarmId)
         }
-        return PendingIntent.getActivity(
-            context,
-            alarmId.toInt(),
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        return PendingIntent.getActivity(context, alarmId.toInt(), intent, IMMUTABLE_UPDATE)
+    }
+
+    private companion object {
+        const val IMMUTABLE_UPDATE = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     }
 }

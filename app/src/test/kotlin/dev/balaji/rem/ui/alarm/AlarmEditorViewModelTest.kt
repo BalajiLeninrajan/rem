@@ -14,7 +14,7 @@ import dev.balaji.rem.data.fake.InMemorySleepSessionRepository
 import dev.balaji.rem.ui.barcodes.BarcodeScanViewModel
 import dev.balaji.rem.ui.barcodes.ScanStage
 import dev.balaji.rem.ui.testing.MainDispatcherRule
-import dev.balaji.rem.ui.testing.MutableClock
+import dev.balaji.rem.testing.MutableClock
 import dev.balaji.rem.ui.testing.keepCollecting
 import java.time.DayOfWeek
 import java.time.Instant
