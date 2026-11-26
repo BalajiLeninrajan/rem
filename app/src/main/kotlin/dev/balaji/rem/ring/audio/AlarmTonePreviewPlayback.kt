@@ -3,10 +3,8 @@ package dev.balaji.rem.ring.audio
 import android.content.Context
 import android.media.AudioFocusRequest
 import android.media.AudioManager
-import android.util.Log
 import dev.balaji.rem.ui.alarm.PreviewPlayback
 import dev.balaji.rem.ui.alarm.PreviewTone
-import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -42,19 +40,19 @@ internal class AlarmTonePreviewPlayback(context: Context, tone: PreviewTone) : P
     init {
         active?.stop()
         active = this
-        guarded("volume floor") { volumeFloor.enforce() }
-        guarded("audio focus") { audioManager.requestAudioFocus(focusRequest) }
+        guarded(TAG, "volume floor") { volumeFloor.enforce() }
+        guarded(TAG, "audio focus") { audioManager.requestAudioFocus(focusRequest) }
         scope.launch {
-            guarded("tone") { player.prepare(tone.ringtoneUri) }
+            guarded(TAG, "tone") { player.prepare(tone.ringtoneUri) }
             // Starts even when preparing failed: the player then rebuilds itself on the bundled tone.
-            guarded("playback") { player.start(rampSeconds = 0) }
+            guarded(TAG, "playback") { player.start(rampSeconds = 0) }
         }
     }
 
     override fun setMinRingVolumePercent(percent: Int) {
         // A ring may have stopped this preview before the editor noticed.
         if (stopped) return
-        guarded("volume floor") {
+        guarded(TAG, "volume floor") {
             volumeFloor.restore()
             volumeFloor = AlarmVolumeFloor(audioManager, percent)
             volumeFloor.enforce()
@@ -68,18 +66,8 @@ internal class AlarmTonePreviewPlayback(context: Context, tone: PreviewTone) : P
         if (active === this) active = null
         scope.cancel()
         player.release()
-        guarded("volume floor") { volumeFloor.restore() }
-        guarded("audio focus") { audioManager.abandonAudioFocusRequest(focusRequest) }
-    }
-
-    private inline fun guarded(what: String, block: () -> Unit) {
-        try {
-            block()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: RuntimeException) {
-            Log.w(TAG, "Preview part failed: $what", e)
-        }
+        guarded(TAG, "volume floor") { volumeFloor.restore() }
+        guarded(TAG, "audio focus") { audioManager.abandonAudioFocusRequest(focusRequest) }
     }
 
     internal companion object {
