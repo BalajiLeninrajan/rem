@@ -2,52 +2,43 @@
 
 1rem = 90min
 
-rem is an Android alarm clock. You tell it when you must be awake, it rings at the end of a sleep cycle shortly before that, and it stops only when you scan a barcode you registered on that alarm, such as the toothpaste in the bathroom. You can snooze it a few times first.
+An Android alarm clock that wakes you at the end of a sleep cycle and only shuts up once you've walked over and scanned a barcode.
 
-It needs Android 12 or newer. It has no accounts, no analytics and no network permission.
+You set the time you have to be up by. Before bed you tap "going to sleep", and rem moves each alarm earlier so it lands on the end of a 90 minute cycle, at most 30 minutes before your deadline. To turn it off you scan a barcode you registered on that alarm, like the one on your toothpaste.
 
-## What it does
+Android 12 or newer. No accounts, no analytics, no network permission.
 
-- Each alarm has a "must wake by" time, repeat days, a label, a ringtone, a vibrate switch, a volume floor, a volume ramp, a snooze length and limit, and its own barcodes. One barcode can be registered on several alarms.
-- The play button next to the alarm sound plays it in the editor on the alarm stream, raised to the alarm's volume floor. That includes the bundled tone, which the system sound picker does not list.
-- Barcodes are added, test-scanned, renamed and deleted in the alarm's editor. A new alarm's barcodes are stored when you save it.
-- "Duplicate", in an alarm card's menu or the editor's top bar, opens a new alarm with the same time, label, days, sound, snooze and barcodes. Nothing is stored until you save the copy.
-- Press "going to sleep" and every alarm due in the next 16 hours moves to the end of a 90 minute cycle, if one ends within 30 minutes before its deadline. Otherwise it rings at the deadline. The home screen shows the ring time and the reason, for example "Rings 06:45, 5 cycles, 15 min before 07:00".
-- When no cycle ends in time but one ends at most 30 minutes after the deadline, you can choose to ring then instead, per alarm and only for that night, for example "Rings 06:15, 4 cycles, 15 min after 06:00". "Going to sleep" asks about each such alarm, and the answer defaults to the alarm time. While the session runs, the alarm's card can switch either way until the alarm time. The yes is for that alarm time: changing the alarm's time or switching it off takes it back. Nothing ever rings more than 30 minutes late, and only after you said yes.
-- A ringing alarm stops when you scan one of its barcodes. The big button says "scan to dismiss" and opens the scanner.
-- Snooze is a plain tap, on the ringing screen or the notification, and needs no barcode. Each alarm sets how long a snooze lasts (5 minutes by default) and how many one ring allows (3 by default, 0 turns snooze off). Once they are used up only dismiss is left. A "snoozed until" notification opens a screen where you can dismiss the alarm early, with the barcode if it has one. A snooze does not end the sleep session, survives a reboot, and if it comes due while another alarm rings it rings right after that one.
-- While the scanner or the typed code screen is open the alarm goes quiet for 60 seconds, and the screen shows the time left. It rings again when that runs out or when you go back. Opening the scanner again gives another 60 seconds. The 30 minute limit still counts.
-- If the barcode is lost or the camera is broken, you can type a 40 character code shown on screen. Pasting is off.
-- An alarm with no barcode stops with a plain Dismiss button, on the ringing screen and on the notification, and its card on the home screen says so.
-- With the headphones-only setting on, alarms play on connected headphones and keep the speaker silent. A ring moves to the speaker when the headphones disconnect or after 2 minutes without dismissal.
-- The alarm volume ramps up, is held above the alarm's floor while ringing and is restored afterwards.
-- Ringing stops after 30 minutes, counted again from each ring after a snooze. That, an alarm the phone slept through, and a ring cut off by a reboot each give a "missed alarm" notification.
-- Alarms survive reboots, including before the first unlock, app updates, and clock and timezone changes.
-- A reliability screen checks notifications, full-screen alarms, exact alarms, Do Not Disturb, background restriction, the camera permission and whether every alarm that is on has a barcode. It has a fix button for each and a "test alarm in 1 minute" button.
-- Cycle length, time to fall asleep, the early window, headphones only and the speaker fallback time are settings for all alarms.
+## Features
 
-## Get the APK
+- Never rings after your deadline. If a cycle ends just after it, rem asks whether you'd rather sleep up to 30 minutes longer that night.
+- Dismiss by scanning one of the alarm's barcodes. If the barcode goes missing or the camera breaks, you can type a 40 character code shown on screen. Pasting is off.
+- Snooze is one tap. Each alarm sets its own snooze length and limit.
+- The volume ramps up and is held at a floor you pick, so a quiet phone still wakes you.
+- Headphones-only mode plays through your earbuds. It switches to the speaker if they disconnect or you sleep through 2 minutes of it.
+- Alarms survive reboots, app updates, process kills and timezone changes.
+- A reliability screen checks every system setting that can silence an alarm and fires a test alarm a minute out.
 
-Every push runs the [build workflow](.github/workflows/build.yml). Open the latest run under Actions, download the `rem-debug-apk` artifact, unzip it and install `app-debug.apk`. With the GitHub CLI:
+## Install
+
+There's no release yet. CI builds a debug APK on every push to this repo:
 
 ```
-gh run download --name rem-debug-apk
+gh run download --repo BalajiLeninrajan/rem --name rem-debug-apk
 adb install app-debug.apk
 ```
 
-After installing, create an alarm, add a barcode to it, open the reliability screen and run the test alarm with the phone locked. The test alarm checks that a locked phone rings. It needs no barcode and stops with a plain button, so try the scanner on your real alarm's first ring.
+After installing, open the reliability screen and run the test alarm with the phone locked.
 
 ## Build
+
+You need JDK 21 and the Android SDK, with `sdk.dir` set in `local.properties`.
 
 ```
 ./gradlew :core:test :app:assembleDebug :app:testDebugUnitTest
 ```
 
-The build needs the Android SDK path in `local.properties` (`sdk.dir=...`) and a JDK 21. Gradle picks the JDK itself from `gradle/gradle-daemon-jvm.properties`, so `JAVA_HOME` does not matter.
+[ARCHITECTURE.md](ARCHITECTURE.md) walks through the code.
 
-## Layout
+## License
 
-- `core` is plain Kotlin with no Android imports. It holds the alarm model, repeat rules, the wake-time calculation, barcode matching and the fallback code.
-- `app` is the Android application, written with Jetpack Compose and Material 3.
-
-[ARCHITECTURE.md](ARCHITECTURE.md) describes the packages and follows an alarm from saving it to scanning the barcode.
+[MIT](LICENSE)
