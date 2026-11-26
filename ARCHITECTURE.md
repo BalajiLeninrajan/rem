@@ -115,7 +115,7 @@ The app does not use the network. The manifest removes `INTERNET` and `ACCESS_NE
 
 ## Tests
 
-`:core` has plain JUnit tests. `:app` tests run on the JVM with Robolectric and coroutines-test: contract tests for every repository (run against Room, DataStore and the in-memory fakes), the scheduler against Robolectric's AlarmManager, the ring controller with a fake service launcher, the view models, `TonePreview`, `MigrationTest` (builds version 1 and version 2 database files by hand and opens them with `RemDatabase.open`, so Room checks the migrated schema), and `AlarmFlowTest`, which runs whole flows on the real container. Nothing covers the service, the audio classes, the camera or the Compose screens. No part of the app has run on a device yet.
+`:core` has plain JUnit tests. `:app` tests run on the JVM with Robolectric and coroutines-test: contract tests for every repository (run against Room, DataStore and the in-memory fakes), the scheduler against Robolectric's AlarmManager, the ring controller with a fake service launcher, the view models, `TonePreview`, `MigrationTest` (builds version 1 and version 2 database files by hand and opens them with `RemDatabase.open`, so Room checks the migrated schema), and `AlarmFlowTest`, which runs whole flows on the real container. Nothing automated covers the service, the audio classes, the camera or the Compose screens. Those get checked by hand on a device.
 
 ## Build
 
