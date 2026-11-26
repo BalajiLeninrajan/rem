@@ -23,8 +23,4 @@ class StableScanFilter(private val requiredFrames: Int = 2) {
         streaks = byKey.mapValues { (key, _) -> (streaks[key] ?: 0) + 1 }
         return byKey.filterKeys { streaks[it] == requiredFrames }.values.toList()
     }
-
-    fun reset() {
-        streaks = emptyMap()
-    }
 }

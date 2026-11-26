@@ -1107,7 +1107,7 @@ class DefaultRingControllerTest {
         assertEquals(0, (controller.state.value as RingingState.Snoozed).snoozesLeft)
         fireSnooze(controller, id)
 
-        assertFalse(controller.ringingState.canSnooze)
+        assertEquals(0, controller.ringingState.snoozesLeft)
         assertEquals(0, (controller.command.value as RingCommand.Play).spec.snoozesLeft)
         assertEquals(2, ringState.currentRinging()?.snoozes)
         assertEquals(SnoozeResult.REJECTED, controller.snooze())
@@ -1120,7 +1120,7 @@ class DefaultRingControllerTest {
     fun `a snooze is rejected at the limit, while the alarm loads and when its entry cannot be set`() = runTest {
         val off = alarms.upsert(Alarm(time = LocalTime.of(7, 0), snoozeLimit = 0))
         val controller = ringing(off)
-        assertFalse(controller.ringingState.canSnooze)
+        assertEquals(0, controller.ringingState.snoozesLeft)
         assertEquals(SnoozeResult.REJECTED, controller.snooze())
         assertTrue(controller.command.value is RingCommand.Play)
         assertTrue(snoozeEntries.isEmpty())

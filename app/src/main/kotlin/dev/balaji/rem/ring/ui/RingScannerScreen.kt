@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Context
-import android.content.pm.PackageManager
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,13 +42,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.balaji.rem.R
 import dev.balaji.rem.di.containerViewModel
 import dev.balaji.rem.scan.BarcodeScanner
 import dev.balaji.rem.ui.system.SystemSettings
+import dev.balaji.rem.ui.system.hasPermission
 
 /** Scans a barcode to dismiss the ring. The alarm is quiet for a while after this screen opens. */
 @Composable
@@ -62,7 +61,7 @@ fun RingScannerScreen(
     val activity = LocalActivity.current
     val viewModel = containerViewModel { RingScannerViewModel(it.ringController) }
 
-    var hasPermission by remember { mutableStateOf(context.hasCameraPermission()) }
+    var hasPermission by remember { mutableStateOf(context.hasPermission(Manifest.permission.CAMERA)) }
     // True once the system refused without asking, or will not ask again. Then only the app settings can grant it.
     var askingBlocked by remember { mutableStateOf(false) }
     var cameraFailed by remember { mutableStateOf(false) }
@@ -71,7 +70,7 @@ fun RingScannerScreen(
     var torchAvailable by remember { mutableStateOf(false) }
 
     val retry: () -> Unit = {
-        hasPermission = context.hasCameraPermission()
+        hasPermission = context.hasPermission(Manifest.permission.CAMERA)
         cameraFailed = false
         cameraAttempt++
     }
@@ -86,7 +85,7 @@ fun RingScannerScreen(
     }
     // The permission dialog and the keyguard both pause this screen, so look again when it comes back.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        hasPermission = context.hasCameraPermission()
+        hasPermission = context.hasPermission(Manifest.permission.CAMERA)
     }
 
     val scanning = hasPermission && !cameraFailed
@@ -213,9 +212,6 @@ private fun ScannerProblem(
         }
     }
 }
-
-private fun Context.hasCameraPermission(): Boolean =
-    ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
 private fun Context.isKeyguardLocked(): Boolean =
     getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true

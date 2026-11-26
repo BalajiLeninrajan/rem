@@ -68,13 +68,6 @@ class StableScanFilterTest {
     }
 
     @Test
-    fun `reset forgets the streak`() {
-        filter.onFrame(listOf(a))
-        filter.reset()
-        assertTrue(filter.onFrame(listOf(a)).isEmpty())
-    }
-
-    @Test
     fun `required frames is configurable and validated`() {
         val strict = StableScanFilter(requiredFrames = 3)
         strict.onFrame(listOf(a))

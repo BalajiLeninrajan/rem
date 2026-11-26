@@ -48,12 +48,6 @@ private val HEADPHONE_TYPES = listOf(
     AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
 )
 
-/**
- * Whether an `AudioDeviceInfo.TYPE_*` is worn on the head. Speakers, the SCO telephony
- * link, HDMI, BLE broadcast and the ambiguous USB and line outputs are not.
- */
-internal fun isHeadphoneType(type: Int): Boolean = type in HEADPHONE_TYPES
-
 /** The device to pin among [connected], or null when none is a headphone. Wired wins over wireless. */
 internal fun pickHeadphone(connected: Collection<OutputDevice>): OutputDevice? =
     HEADPHONE_TYPES.firstNotNullOfOrNull { type -> connected.firstOrNull { it.type == type } }
