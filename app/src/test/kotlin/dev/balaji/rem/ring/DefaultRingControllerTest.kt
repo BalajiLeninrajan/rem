@@ -15,7 +15,7 @@ import dev.balaji.rem.data.fake.InMemoryRingStateStore
 import dev.balaji.rem.data.fake.InMemorySettingsRepository
 import dev.balaji.rem.data.fake.InMemorySleepSessionRepository
 import dev.balaji.rem.schedule.AlarmBroadcast
-import dev.balaji.rem.schedule.MutableClock
+import dev.balaji.rem.testing.MutableClock
 import java.io.IOException
 import java.time.Duration
 import java.time.Instant

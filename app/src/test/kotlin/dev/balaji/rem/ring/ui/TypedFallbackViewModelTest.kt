@@ -1,11 +1,11 @@
 package dev.balaji.rem.ring.ui
 
-import dev.balaji.rem.ring.IdleRingController
+import dev.balaji.rem.testing.FakeRingController
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class TypedFallbackViewModelTest {
-    private val controller = IdleRingController()
+    private val controller = FakeRingController()
     private val viewModel = TypedFallbackViewModel(controller)
 
     @Test

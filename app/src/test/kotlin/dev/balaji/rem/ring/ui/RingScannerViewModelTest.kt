@@ -1,13 +1,13 @@
 package dev.balaji.rem.ring.ui
 
-import dev.balaji.rem.ring.IdleRingController
+import dev.balaji.rem.testing.FakeRingController
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class RingScannerViewModelTest {
     @Test
     fun `a scanner made from saved state leaves the ring loud`() {
-        val controller = IdleRingController()
+        val controller = FakeRingController()
 
         RingScannerViewModel(controller)
 

@@ -1,9 +1,7 @@
 package dev.balaji.rem.schedule
 
 import dev.balaji.rem.RemApplication
-import dev.balaji.rem.core.ScannedCode
 import dev.balaji.rem.core.SchedulePlan
-import dev.balaji.rem.core.ScheduledRing
 import dev.balaji.rem.data.RingStateStore
 import dev.balaji.rem.data.fake.InMemoryAlarmRepository
 import dev.balaji.rem.data.fake.InMemoryBarcodeRepository
@@ -12,28 +10,15 @@ import dev.balaji.rem.data.fake.InMemorySettingsRepository
 import dev.balaji.rem.data.fake.InMemorySleepSessionRepository
 import dev.balaji.rem.di.AppContainer
 import dev.balaji.rem.ring.AlarmNotifier
-import dev.balaji.rem.ring.DismissResult
 import dev.balaji.rem.ring.MissedAlarm
-import dev.balaji.rem.ring.RingController
-import dev.balaji.rem.ring.RingingState
-import dev.balaji.rem.ring.SnoozeResult
 import dev.balaji.rem.ring.SnoozedAlarm
+import dev.balaji.rem.testing.FakeRingController
 import java.time.Clock
 import java.time.Instant
-import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-
-/** A clock the test moves by hand. */
-class MutableClock(var now: Instant, var currentZone: ZoneId) : Clock() {
-    override fun getZone(): ZoneId = currentZone
-
-    override fun withZone(zone: ZoneId): Clock = MutableClock(now, zone)
-
-    override fun instant(): Instant = now
-}
 
 class RecordingNotifier : AlarmNotifier {
     val missed = mutableListOf<MissedAlarm>()
@@ -47,60 +32,6 @@ class RecordingNotifier : AlarmNotifier {
     override fun notifySnoozed(snoozed: SnoozedAlarm) = Unit
 
     override fun cancelSnoozed(alarmId: Long) = Unit
-}
-
-class RecordingRingController : RingController {
-    val started = mutableListOf<ScheduledRing>()
-    val resumed = mutableListOf<ScheduledRing>()
-    val snoozesEnded = mutableListOf<ScheduledRing>()
-
-    /** How often [snooze] and [dismissWithoutBarcode] were called. */
-    var snoozeCalls = 0
-        private set
-    var plainDismissals = 0
-        private set
-
-    /** What [startRinging] answers. False stands for a ring that another ring swallowed. */
-    var accepts = true
-
-    override val state = MutableStateFlow<RingingState>(RingingState.Idle)
-
-    override val snoozed: StateFlow<List<RingingState.Snoozed>> = MutableStateFlow(emptyList())
-
-    override fun startRinging(ring: ScheduledRing): Boolean {
-        started += ring
-        return accepts
-    }
-
-    override fun resumeRinging(ring: ScheduledRing) {
-        resumed += ring
-    }
-
-    override fun endSnooze(ring: ScheduledRing) {
-        snoozesEnded += ring
-    }
-
-    override suspend fun snooze(): SnoozeResult {
-        snoozeCalls++
-        return SnoozeResult.SNOOZED
-    }
-
-    override suspend fun dismissWithBarcode(scanned: ScannedCode) = DismissResult.NOT_RINGING
-
-    override suspend fun dismissWithTypedCode(typed: String) = DismissResult.NOT_RINGING
-
-    override suspend fun dismissWithoutBarcode(): DismissResult {
-        plainDismissals++
-        return DismissResult.DISMISSED
-    }
-
-    override fun newFallbackCode() = ""
-
-    override fun startQuietPeriod() = Unit
-
-    override fun endQuietPeriod() = Unit
-
-    override suspend fun recoverInterruptedRing() = Unit
 }
 
 /** Records, for each reschedule, the fired deadlines that were stored when it ran. */
@@ -124,7 +55,7 @@ class FakeAppContainer(override val applicationScope: CoroutineScope) : AppConta
     override val sleepSessionRepository = InMemorySleepSessionRepository()
     override val ringStateStore = InMemoryRingStateStore()
     override val alarmScheduler = RecordingScheduler(ringStateStore)
-    override val ringController = RecordingRingController()
+    override val ringController = FakeRingController()
     override val alarmNotifier = RecordingNotifier()
 }
 
