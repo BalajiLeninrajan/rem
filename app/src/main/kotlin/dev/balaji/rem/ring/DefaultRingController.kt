@@ -47,19 +47,13 @@ import kotlinx.coroutines.withTimeout
  * now, so deleting the alarm during the ring leaves the scanner working. The test alarm
  * has no stored alarm and needs no barcode.
  *
- * A ring that ends without a dismissal while its deadline is still ahead stays owed: its
- * fired record is removed and a one-shot alarm stays on, so the next reschedule plans the
- * deadline again.
- *
  * While the user scans or types the code, the ring can be quiet for a while
  * ([RingLimits.QUIET_PERIOD]). That lives only in memory: a ring picked up again after a
  * process death starts loud, and the 30 minute limit and the watchdog do not change.
  *
- * A snooze ends the ringing stretch but not the ring. Its record moves to the snoozed
- * rings in the store, an alarm clock entry of its own brings it back, and the ring that
- * comes back starts a new stretch with its own 30 minutes. Only a dismissal ends the
- * session or disables a one-shot alarm. While a ring is snoozed other alarms ring as
- * usual. A snooze that comes due during another ring waits for that ring to end.
+ * A snoozed ring's record moves to the snoozed rings in the store. While a ring is
+ * snoozed other alarms ring as usual. A snooze that comes due during another ring waits
+ * for that ring to end.
  *
  * @param watchdog an alarm clock entry kept a minute ahead while a ring is live. It
  *   brings the ring back when the process dies, and after a reboot.
@@ -226,20 +220,10 @@ internal class DefaultRingController(
 
     override fun resumeRinging(ring: ScheduledRing) {
         val mine = claim(ring, Origin.RESUMED) ?: return
-        try {
-            launcher.start(ring)
-        } catch (e: RuntimeException) {
-            scope.launch {
-                if (!release(mine)) return@launch
-                storeMutex.withLock {
-                    val record = loadOr(null) { ringState.currentRinging() }
-                    if (record != null && record.describes(ring)) attempt { reportInterrupted(record) }
-                }
-                attempt { reschedule() }
-            }
-            return
+        launchOrRecover(mine) {
+            val record = loadOr(null) { ringState.currentRinging() }
+            if (record != null && record.describes(ring)) attempt { reportInterrupted(record) }
         }
-        scope.launch { begin(mine) }
     }
 
     override fun onServiceStarted(ring: ScheduledRing, redelivered: Boolean) {
@@ -251,15 +235,23 @@ internal class DefaultRingController(
     override fun endSnooze(ring: ScheduledRing) {
         // While another alarm rings this does nothing. The end of that ring sets the entry again, see ringDueSnooze.
         val mine = claim(ring, Origin.SNOOZE_ENDED) ?: return
+        launchOrRecover(mine) {
+            val record = loadOr(null) { ringState.currentSnoozed() }?.firstOrNull { it.describes(ring) }
+            if (record != null) attempt { reportLostSnooze(record) }
+        }
+    }
+
+    /**
+     * Starts the service for a claimed ring that picks up a persisted record. When the
+     * service cannot start, the claim is released and [recover] runs with [storeMutex] held.
+     */
+    private fun launchOrRecover(mine: Live, recover: suspend () -> Unit) {
         try {
-            launcher.start(ring)
+            launcher.start(mine.ring)
         } catch (e: RuntimeException) {
             scope.launch {
                 if (!release(mine)) return@launch
-                storeMutex.withLock {
-                    val record = loadOr(null) { ringState.currentSnoozed() }?.firstOrNull { it.describes(ring) }
-                    if (record != null) attempt { reportLostSnooze(record) }
-                }
+                storeMutex.withLock { recover() }
                 attempt { reschedule() }
             }
             return
@@ -472,9 +464,7 @@ internal class DefaultRingController(
         }
         cancelSnoozeEntry(id)
         attempt { notifier.cancelSnoozed(id) }
-        val label = labelOf(id, loadOr(null) { alarms.get(id) })
-        attempt { settle(id, record.deadline) }
-        notifier.notifyMissed(MissedAlarm(id, label, record.deadline, MissedReason.RING_INTERRUPTED))
+        reportMissed(record)
     }
 
     /**
@@ -494,6 +484,10 @@ internal class DefaultRingController(
     /** Ends a ring that nothing is playing any more. Call with [storeMutex] held. */
     private suspend fun reportInterrupted(record: RingingRecord) {
         if (isLive(record) || !ringState.clearRinging(record)) return
+        reportMissed(record)
+    }
+
+    private suspend fun reportMissed(record: RingingRecord) {
         val label = labelOf(record.alarmId, loadOr(null) { alarms.get(record.alarmId) })
         attempt { settle(record.alarmId, record.deadline) }
         notifier.notifyMissed(MissedAlarm(record.alarmId, label, record.deadline, MissedReason.RING_INTERRUPTED))
@@ -706,13 +700,10 @@ internal class DefaultRingController(
                 attempt { disableIfOneShot(ring.alarmId, ring.deadline) }
                 if (!mine.isTest) attempt { endSessionCovering(ring.deadline) }
             }
-            Ending.TIMED_OUT -> {
+            Ending.TIMED_OUT, Ending.INTERRUPTED -> {
+                val reason = if (ending == Ending.TIMED_OUT) MissedReason.RING_TIMED_OUT else MissedReason.RING_INTERRUPTED
                 attempt { settle(ring.alarmId, ring.deadline) }
-                attempt { notifyMissed(mine, MissedReason.RING_TIMED_OUT) }
-            }
-            Ending.INTERRUPTED -> {
-                attempt { settle(ring.alarmId, ring.deadline) }
-                attempt { notifyMissed(mine, MissedReason.RING_INTERRUPTED) }
+                attempt { notifier.notifyMissed(MissedAlarm(ring.alarmId, mine.label, ring.deadline, reason)) }
             }
             Ending.CANCELLED -> Unit
         }
@@ -722,10 +713,6 @@ internal class DefaultRingController(
 
     private suspend fun endSessionCovering(deadline: Instant) {
         if (sessions.current()?.covers(deadline) == true) sessions.end()
-    }
-
-    private fun notifyMissed(mine: Live, reason: MissedReason) {
-        notifier.notifyMissed(MissedAlarm(mine.ring.alarmId, mine.label, mine.ring.deadline, reason))
     }
 
     /**

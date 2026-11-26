@@ -60,15 +60,15 @@ internal class RingPlayback(private val context: Context, val spec: RingSpec) {
         // When Do Not Disturb mutes the tone, vibration is tried whatever the alarm says. The system may
         // block an alarm vibration together with the tone, so the reliability warning is the real defence.
         vibrate = spec.vibrate
-        guarded("do not disturb") { vibrate = vibrate || readDoNotDisturb(context) == DoNotDisturb.ALARMS_MUTED }
+        guarded(TAG, "do not disturb") { vibrate = vibrate || readDoNotDisturb(context) == DoNotDisturb.ALARMS_MUTED }
         startVibrating()
         // Other players pause when focus is granted. The alarm plays whether it is or not.
-        guarded("audio focus") { audioManager.requestAudioFocus(focusRequest) }
+        guarded(TAG, "audio focus") { audioManager.requestAudioFocus(focusRequest) }
         scope.launch {
-            guarded("tone") { player.prepare(spec.ringtoneUri) }
-            guarded("routing") { router.start() }
+            guarded(TAG, "tone") { player.prepare(spec.ringtoneUri) }
+            guarded(TAG, "routing") { router.start() }
             // Starts even when preparing failed: the player then rebuilds itself on the bundled tone.
-            guarded("playback") { player.start(spec.volumeRampSeconds) }
+            guarded(TAG, "playback") { player.start(spec.volumeRampSeconds) }
             while (true) {
                 volumeFloor.enforce()
                 delay(VOLUME_POLL_MILLIS)
@@ -80,11 +80,11 @@ internal class RingPlayback(private val context: Context, val spec: RingSpec) {
     fun setQuiet(quiet: Boolean) {
         if (this.quiet == quiet) return
         this.quiet = quiet
-        guarded("tone") { player.setPaused(quiet) }
+        guarded(TAG, "tone") { player.setPaused(quiet) }
         if (quiet) {
             vibrating?.cancel()
             vibrating = null
-            guarded("vibration") { vibration.stop() }
+            guarded(TAG, "vibration") { vibration.stop() }
         } else if (started) {
             startVibrating()
         }
@@ -95,7 +95,7 @@ internal class RingPlayback(private val context: Context, val spec: RingSpec) {
         // One request per cycle. The system cancels a vibration when the screen turns off, and the next cycle brings it back.
         vibrating = scope.launch {
             while (true) {
-                guarded("vibration") { vibration.pulse() }
+                guarded(TAG, "vibration") { vibration.pulse() }
                 delay(AlarmVibration.PATTERN_LENGTH_MILLIS)
             }
         }
@@ -103,25 +103,26 @@ internal class RingPlayback(private val context: Context, val spec: RingSpec) {
 
     fun stop() {
         scope.cancel()
-        guarded("routing") { router.stop() }
+        guarded(TAG, "routing") { router.stop() }
         player.release()
         vibration.stop()
         volumeFloor.restore()
-        guarded("audio focus") { audioManager.abandonAudioFocusRequest(focusRequest) }
-    }
-
-    private inline fun guarded(what: String, block: () -> Unit) {
-        try {
-            block()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: RuntimeException) {
-            Log.w(TAG, "Ring part failed: $what", e)
-        }
+        guarded(TAG, "audio focus") { audioManager.abandonAudioFocusRequest(focusRequest) }
     }
 
     private companion object {
         const val TAG = "RingPlayback"
         const val VOLUME_POLL_MILLIS = 750L
+    }
+}
+
+/** Runs one part of starting or stopping playback. A failure is logged so the other parts still run. */
+internal inline fun guarded(tag: String, what: String, block: () -> Unit) {
+    try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: RuntimeException) {
+        Log.w(tag, "Part failed: $what", e)
     }
 }
