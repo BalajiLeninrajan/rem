@@ -34,9 +34,7 @@ sealed interface RingingState {
         val quietUntil: Instant? = null,
         val snoozeMinutes: Int = 0,
         val snoozesLeft: Int = 0,
-    ) : RingingState {
-        val canSnooze: Boolean get() = snoozesLeft > 0
-    }
+    ) : RingingState
 
     /**
      * A ring that was snoozed and rings again at [until]. It can be dismissed before then,
