@@ -8,12 +8,7 @@ You set the time you have to be up by. Before bed you tap "going to sleep", and 
 
 ## Install
 
-There's no release yet. CI builds a debug APK on every push to this repo:
-
-```
-gh run download --repo BalajiLeninrajan/rem --name rem-debug-apk
-adb install app-debug.apk
-```
+Download the APK from the [latest release](https://github.com/BalajiLeninrajan/rem/releases/latest) and open it on your phone, or install it with `adb install`.
 
 After installing, open the reliability screen and run the test alarm with the phone locked.
 
